@@ -1,3 +1,6 @@
+mod ebnf;
+
 fn main() {
-    println!("Hello, world!");
+    let file_path = "diamondback.lex";
+    let diamondback_grammar = ebnf::parse_grammar(file_path);
 }
