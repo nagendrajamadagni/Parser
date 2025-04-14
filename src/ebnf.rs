@@ -3,12 +3,14 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+#[derive(Debug)]
 pub enum RepetitionType {
     ZeroOrMore,
     OneOrMore,
     ZeroOrOne,
 }
 
+#[derive(Debug)]
 pub enum Term {
     Terminal(String),
     NonTerminal(String),
@@ -16,15 +18,18 @@ pub enum Term {
     Repetition(Box<Term>, RepetitionType),
 }
 
+#[derive(Debug)]
 pub struct Expression {
     sequence: Vec<Term>,
 }
 
+#[derive(Debug)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Expression>,
 }
 
+#[derive(Debug)]
 pub struct Grammar {
     productions: Vec<Production>,
 }
@@ -124,7 +129,10 @@ impl Production {
             );
         }
 
-        let lhs = Term::NonTerminal(tokens[start].0.clone());
+        let prod = &tokens[start].0;
+        let prod = &prod[1..prod.len() - 1];
+
+        let lhs = Term::NonTerminal(prod.to_string());
 
         let mut rhs: Vec<Expression> = Vec::new();
 
@@ -204,6 +212,7 @@ pub fn parse_grammar(file_path: &str) -> Grammar {
         ),
     };
     let parsed_grammar = Grammar::parse(file);
+    println!("The parsed grammar is {:?}", parsed_grammar);
 
     return parsed_grammar;
 }
