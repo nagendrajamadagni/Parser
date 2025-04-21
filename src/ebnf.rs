@@ -27,7 +27,7 @@ pub struct Production {
     rhs: Vec<Expression>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grammar {
     goal: Production,
     productions: Vec<Production>,
@@ -249,7 +249,7 @@ mod ebnf_parser_test_helpers {
 
 mod ebnf_parser_tests {
     use crate::ebnf::{
-        ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
+        Grammar, ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
     };
     use lexviz::scanner::Token;
 
@@ -567,6 +567,84 @@ mod ebnf_parser_tests {
 
         match result.downcast_ref().unwrap() {
             ParseError::MultipleLeftProductions(_, _) => assert!(true),
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_grammar() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("::=", "DEFINES"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(";", "TERMINATION"));
+
+        let grammar = Grammar::parse(tokens);
+
+        assert!(grammar.is_ok());
+
+        let grammar = grammar.unwrap();
+
+        let mut expression_list: Vec<Term> = Vec::new();
+
+        expression_list.push(Term::Group(Box::new(vec![
+            Term::Terminal("5".to_string()),
+            Term::Terminal("+".to_string()),
+            Term::Group(Box::new(vec![Term::Repetition(
+                Box::new(Term::NonTerminal("boolean".to_string())),
+                RepetitionType::ZeroOrOne,
+            )])),
+        ])));
+
+        let expected_production = Production {
+            lhs: Term::NonTerminal("test".to_string()),
+            rhs: vec![Expression {
+                sequence: expression_list.clone(),
+            }],
+        };
+
+        let expected_grammar = Grammar {
+            goal: Production {
+                lhs: Term::NonTerminal("test".to_string()),
+                rhs: vec![Expression {
+                    sequence: expression_list,
+                }],
+            },
+            productions: vec![expected_production],
+        };
+
+        assert_eq!(expected_grammar, grammar);
+    }
+
+    #[test]
+    fn test_grammar_incomplete_production() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("::=", "DEFINES"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let grammar = Grammar::parse(tokens);
+
+        assert!(grammar.is_err());
+
+        let result = grammar.unwrap_err();
+
+        match result.downcast_ref().unwrap() {
+            ParseError::IncompleteProductionError => assert!(true),
             _ => assert!(false),
         }
     }
