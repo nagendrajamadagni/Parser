@@ -16,12 +16,12 @@ pub enum Term {
     Repetition(Box<Term>, RepetitionType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expression {
     sequence: Vec<Term>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Expression>,
@@ -248,7 +248,9 @@ mod ebnf_parser_test_helpers {
 #[cfg(test)]
 
 mod ebnf_parser_tests {
-    use crate::ebnf::{ParseError, RepetitionType, Term, ebnf_parser_test_helpers::get_token};
+    use crate::ebnf::{
+        ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
+    };
     use lexviz::scanner::Token;
 
     use super::Expression;
@@ -425,6 +427,146 @@ mod ebnf_parser_tests {
 
         match expression.downcast_ref().unwrap() {
             ParseError::InvalidTokenErr(_) => assert!(true),
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_production() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("::=", "DEFINES"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_ok());
+
+        let production = production.unwrap();
+
+        let mut expression_list: Vec<Term> = Vec::new();
+
+        expression_list.push(Term::Group(Box::new(vec![
+            Term::Terminal("5".to_string()),
+            Term::Terminal("+".to_string()),
+            Term::Group(Box::new(vec![Term::Repetition(
+                Box::new(Term::NonTerminal("boolean".to_string())),
+                RepetitionType::ZeroOrOne,
+            )])),
+        ])));
+
+        let expected_production = Production {
+            lhs: Term::NonTerminal("test".to_string()),
+            rhs: vec![Expression {
+                sequence: expression_list,
+            }],
+        };
+
+        assert_eq!(expected_production, production);
+    }
+
+    #[test]
+    fn test_production_alternation() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("::=", "DEFINES"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token("\\|", "ALTERNATION"));
+        tokens.push(get_token("6", "NON_TERMINAL"));
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_ok());
+
+        let production = production.unwrap();
+
+        let mut expression_list: Vec<Term> = Vec::new();
+
+        expression_list.push(Term::Group(Box::new(vec![
+            Term::Terminal("5".to_string()),
+            Term::Terminal("+".to_string()),
+            Term::Group(Box::new(vec![Term::Repetition(
+                Box::new(Term::NonTerminal("boolean".to_string())),
+                RepetitionType::ZeroOrOne,
+            )])),
+        ])));
+
+        let expected_production = Production {
+            lhs: Term::NonTerminal("test".to_string()),
+            rhs: vec![
+                Expression {
+                    sequence: expression_list,
+                },
+                Expression {
+                    sequence: vec![Term::NonTerminal("6".to_string())],
+                },
+            ],
+        };
+
+        assert_eq!(expected_production, production);
+    }
+
+    #[test]
+    fn test_production_invalid_production() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "TERMINAL"));
+        tokens.push(get_token("::=", "DEFINES"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_err());
+
+        let result = production.unwrap_err();
+
+        match result.downcast_ref().unwrap() {
+            ParseError::InvalidProductionLHS(_) => assert!(true),
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_production_missing_defines() {
+        let mut tokens: Vec<Token> = Vec::new();
+        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_err());
+
+        let result = production.unwrap_err();
+
+        match result.downcast_ref().unwrap() {
+            ParseError::MultipleLeftProductions(_, _) => assert!(true),
             _ => assert!(false),
         }
     }
