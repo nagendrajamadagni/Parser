@@ -1,14 +1,14 @@
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepetitionType {
     ZeroOrMore,
     OneOrMore,
     ZeroOrOne,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Term {
     Terminal(String),
     NonTerminal(String),
@@ -234,4 +234,198 @@ pub fn parse_grammar(token_list: Vec<Token>) -> Result<Grammar> {
     println!("The parsed grammar is {:?}", parsed_grammar);
 
     return Ok(parsed_grammar);
+}
+
+#[cfg(test)]
+
+mod ebnf_parser_test_helpers {
+    use lexviz::scanner::Token;
+
+    pub fn get_token(token: &str, category: &str) -> Token {
+        Token::new(token.to_string(), category.to_string())
+    }
+}
+#[cfg(test)]
+
+mod ebnf_parser_tests {
+    use crate::ebnf::{ParseError, RepetitionType, Term, ebnf_parser_test_helpers::get_token};
+    use lexviz::scanner::Token;
+
+    use super::Expression;
+
+    #[test]
+    fn test_expression_parse_terminal() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("true", "TERMINAL"));
+
+        let expression = Expression::parse(&tokens, 0, 0);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::Terminal("true".to_string()));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_parse_non_terminal() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+
+        let expression = Expression::parse(&tokens, 0, 0);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::NonTerminal("boolean".to_string()));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_parse_terminal_repeat() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("true", "TERMINAL"));
+        tokens.push(get_token("\\*", "ASTERISK"));
+
+        let expression = Expression::parse(&tokens, 0, 1);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::Repetition(
+            Box::new(Term::Terminal("true".to_string())),
+            RepetitionType::ZeroOrMore,
+        ));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_parse_non_terminal_repeat() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("\\+", "PLUS"));
+
+        let expression = Expression::parse(&tokens, 0, 1);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::Repetition(
+            Box::new(Term::NonTerminal("boolean".to_string())),
+            RepetitionType::OneOrMore,
+        ));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_parse_group() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::Group(Box::new(vec![
+            Term::Terminal("5".to_string()),
+            Term::Terminal("+".to_string()),
+            Term::Group(Box::new(vec![Term::Repetition(
+                Box::new(Term::NonTerminal("boolean".to_string())),
+                RepetitionType::ZeroOrOne,
+            )])),
+        ])));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_unbalanced_paren() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(expression.is_err());
+
+        let expression = expression.unwrap_err();
+
+        match expression.downcast_ref().unwrap() {
+            ParseError::UnbalancedParenError => assert!(true),
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_expression_invalid_token() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("5", "NUMBER"));
+        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("\\(", "LPAREN"));
+        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("?", "QUESTION"));
+        tokens.push(get_token(")", "RPAREN"));
+        tokens.push(get_token(")", "RPAREN"));
+
+        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(expression.is_err());
+
+        let expression = expression.unwrap_err();
+
+        match expression.downcast_ref().unwrap() {
+            ParseError::InvalidTokenErr(_) => assert!(true),
+            _ => assert!(false),
+        }
+    }
 }
