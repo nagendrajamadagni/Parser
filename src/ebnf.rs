@@ -86,7 +86,7 @@ impl Expression {
 
             let term = match category.as_str() {
                 "TERMINAL" => Term::Terminal(word.to_string()),
-                "NON_TERMINAL" => Term::NonTerminal(word.to_string()),
+                "NON_TERMINAL" => Term::NonTerminal(word[1..word.len() - 1].to_string()),
                 "LPAREN" => {
                     let mut depth = 1; // Start at depth 1
                     let mut rparen_idx = idx + 1; // Assume rparen is next token
@@ -172,7 +172,7 @@ impl Production {
 
         let prod = &tokens[start].get_token();
 
-        let lhs = Term::NonTerminal(prod.to_string());
+        let lhs = Term::NonTerminal(prod[1..prod.len() - 1].to_string());
 
         let mut rhs: Vec<Expression> = Vec::new();
 
@@ -280,7 +280,7 @@ mod ebnf_parser_tests {
     fn test_expression_parse_non_terminal() {
         let mut tokens: Vec<Token> = Vec::new();
 
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
 
         let expression = Expression::parse(&tokens, 0, 0);
 
@@ -326,7 +326,7 @@ mod ebnf_parser_tests {
     fn test_expression_parse_non_terminal_repeat() {
         let mut tokens: Vec<Token> = Vec::new();
 
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("\\+", "PLUS"));
 
         let expression = Expression::parse(&tokens, 0, 1);
@@ -355,7 +355,7 @@ mod ebnf_parser_tests {
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -390,7 +390,7 @@ mod ebnf_parser_tests {
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
 
@@ -414,7 +414,7 @@ mod ebnf_parser_tests {
         tokens.push(get_token("5", "NUMBER"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -434,13 +434,13 @@ mod ebnf_parser_tests {
     #[test]
     fn test_production() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -475,18 +475,18 @@ mod ebnf_parser_tests {
     #[test]
     fn test_production_alternation() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token("\\|", "ALTERNATION"));
-        tokens.push(get_token("6", "NON_TERMINAL"));
+        tokens.push(get_token("<6>", "NON_TERMINAL"));
 
         let production = Production::parse(&tokens, 0, tokens.len() - 1);
 
@@ -523,13 +523,13 @@ mod ebnf_parser_tests {
     #[test]
     fn test_production_invalid_production() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "TERMINAL"));
+        tokens.push(get_token("<test>", "TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -549,12 +549,12 @@ mod ebnf_parser_tests {
     #[test]
     fn test_production_missing_defines() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -574,13 +574,13 @@ mod ebnf_parser_tests {
     #[test]
     fn test_grammar() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
@@ -626,13 +626,13 @@ mod ebnf_parser_tests {
     #[test]
     fn test_grammar_incomplete_production() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("test", "NON_TERMINAL"));
+        tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "TERMINAL"));
         tokens.push(get_token("+", "TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("boolean", "NON_TERMINAL"));
+        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
         tokens.push(get_token(")", "RPAREN"));
         tokens.push(get_token(")", "RPAREN"));
