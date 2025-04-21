@@ -4,6 +4,8 @@ use lexviz::{
 
 mod ebnf;
 
+use color_eyre::eyre::Result;
+
 fn get_ebnf_mst_list() -> Vec<(String, String)> {
     let mut ebnf_mst_list: Vec<(String, String)> = Vec::new();
 
@@ -24,7 +26,8 @@ fn get_ebnf_mst_list() -> Vec<(String, String)> {
     return ebnf_mst_list;
 }
 
-fn main() {
+fn main() -> Result<()> {
+    color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
     let diamondback_ebnf = "diamondback.ebnf".to_string();
@@ -41,5 +44,7 @@ fn main() {
 
     let lexed_output = scanner.scan(diamondback_ebnf, None, true, None).unwrap();
 
-    let diamondback_grammar = ebnf::parse_grammar(lexed_output).unwrap();
+    let _grammar = ebnf::parse_grammar(lexed_output).unwrap();
+
+    return Ok(());
 }
