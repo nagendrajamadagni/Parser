@@ -1,10 +1,12 @@
+use grammar::check_correctness;
 use lexviz::{
     construct_dfa, construct_minimal_dfa, construct_nfa, construct_scanner, parse_microsyntax_list,
 };
 
 mod ebnf;
+mod grammar;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Report, Result};
 
 fn get_ebnf_mst_list() -> Vec<(String, String)> {
     let mut ebnf_mst_list: Vec<(String, String)> = Vec::new();
@@ -30,7 +32,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
-    let diamondback_ebnf = "diamondback.ebnf".to_string();
+    let diamondback_ebnf = "adder.ebnf".to_string();
 
     let syntax_tree_list = parse_microsyntax_list(ebnf_mst_list).unwrap();
 
@@ -44,7 +46,8 @@ fn main() -> Result<()> {
 
     let lexed_output = scanner.scan(diamondback_ebnf, None, true, None).unwrap();
 
-    let _grammar = ebnf::parse_grammar(lexed_output).unwrap();
+    let grammar = ebnf::parse_grammar(lexed_output).unwrap();
 
-    return Ok(());
+    check_correctness(&grammar)?;
+    Ok(())
 }

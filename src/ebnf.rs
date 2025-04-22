@@ -1,14 +1,14 @@
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RepetitionType {
     ZeroOrMore,
     OneOrMore,
     ZeroOrOne,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Term {
     Terminal(String),
     NonTerminal(String),
@@ -16,12 +16,12 @@ pub enum Term {
     Repetition(Box<Term>, RepetitionType),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Expression {
     sequence: Vec<Term>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Expression>,
@@ -69,6 +69,9 @@ impl std::fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 impl Expression {
+    pub fn get_terms(&self) -> &Vec<Term> {
+        &self.sequence
+    }
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
         let mut sequence: Vec<Term> = Vec::new();
 
@@ -155,6 +158,14 @@ impl Expression {
 }
 
 impl Production {
+    pub fn get_expressions(&self) -> &Vec<Expression> {
+        return &self.rhs;
+    }
+
+    pub fn get_left_term(&self) -> &Term {
+        return &self.lhs;
+    }
+
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
         if tokens[start].get_category() != "NON_TERMINAL" {
             let err = Report::new(ParseError::InvalidProductionLHS(
@@ -197,6 +208,14 @@ impl Production {
 }
 
 impl Grammar {
+    pub fn get_goal(&self) -> &Production {
+        return &self.goal;
+    }
+
+    pub fn get_productions(&self) -> &Vec<Production> {
+        return &self.productions;
+    }
+
     fn parse(token_list: Vec<Token>) -> Result<Self> {
         let mut production_start = 0;
         let mut production_end = 0;
@@ -231,7 +250,7 @@ impl Grammar {
 /// Read an EBNF file and return the Grammar structure
 pub fn parse_grammar(token_list: Vec<Token>) -> Result<Grammar> {
     let parsed_grammar = Grammar::parse(token_list)?;
-    println!("The parsed grammar is {:?}", parsed_grammar);
+    //println!("The parsed grammar is {:?}", parsed_grammar);
 
     return Ok(parsed_grammar);
 }
