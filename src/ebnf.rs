@@ -10,7 +10,8 @@ pub enum RepetitionType {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Term {
-    Terminal(String),
+    TerminalLiteral(String),
+    TerminalCategory(String),
     NonTerminal(String),
     Group(Box<Vec<Term>>),
     Repetition(Box<Term>, RepetitionType),
@@ -88,8 +89,9 @@ impl Expression {
             };
 
             let term = match category.as_str() {
-                "TERMINAL" => Term::Terminal(word.to_string()),
+                "TERMINAL_LITERAL" => Term::TerminalLiteral(word.to_string()),
                 "NON_TERMINAL" => Term::NonTerminal(word[1..word.len() - 1].to_string()),
+                "TERMINAL_CATEGORY" => Term::TerminalCategory(word.to_string()),
                 "LPAREN" => {
                     let mut depth = 1; // Start at depth 1
                     let mut rparen_idx = idx + 1; // Assume rparen is next token
@@ -278,7 +280,7 @@ mod ebnf_parser_tests {
     fn test_expression_parse_terminal() {
         let mut tokens: Vec<Token> = Vec::new();
 
-        tokens.push(get_token("true", "TERMINAL"));
+        tokens.push(get_token("true", "TERMINAL_LITERAL"));
 
         let expression = Expression::parse(&tokens, 0, 0);
 
@@ -290,7 +292,28 @@ mod ebnf_parser_tests {
 
         let mut expected_list: Vec<Term> = Vec::new();
 
-        expected_list.push(Term::Terminal("true".to_string()));
+        expected_list.push(Term::TerminalLiteral("true".to_string()));
+
+        assert_eq!(sequence, expected_list);
+    }
+
+    #[test]
+    fn test_expression_parse_terminal_category() {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        tokens.push(get_token("NUMBER", "TERMINAL_CATEGORY"));
+
+        let expression = Expression::parse(&tokens, 0, 0);
+
+        assert!(expression.is_ok());
+
+        let expression = expression.unwrap();
+
+        let sequence = expression.sequence;
+
+        let mut expected_list: Vec<Term> = Vec::new();
+
+        expected_list.push(Term::TerminalCategory("NUMBER".to_string()));
 
         assert_eq!(sequence, expected_list);
     }
@@ -320,7 +343,7 @@ mod ebnf_parser_tests {
     fn test_expression_parse_terminal_repeat() {
         let mut tokens: Vec<Token> = Vec::new();
 
-        tokens.push(get_token("true", "TERMINAL"));
+        tokens.push(get_token("true", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\*", "ASTERISK"));
 
         let expression = Expression::parse(&tokens, 0, 1);
@@ -334,7 +357,7 @@ mod ebnf_parser_tests {
         let mut expected_list: Vec<Term> = Vec::new();
 
         expected_list.push(Term::Repetition(
-            Box::new(Term::Terminal("true".to_string())),
+            Box::new(Term::TerminalLiteral("true".to_string())),
             RepetitionType::ZeroOrMore,
         ));
 
@@ -371,8 +394,8 @@ mod ebnf_parser_tests {
         let mut tokens: Vec<Token> = Vec::new();
 
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -390,8 +413,8 @@ mod ebnf_parser_tests {
         let mut expected_list: Vec<Term> = Vec::new();
 
         expected_list.push(Term::Group(Box::new(vec![
-            Term::Terminal("5".to_string()),
-            Term::Terminal("+".to_string()),
+            Term::TerminalLiteral("5".to_string()),
+            Term::TerminalLiteral("+".to_string()),
             Term::Group(Box::new(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
@@ -406,8 +429,8 @@ mod ebnf_parser_tests {
         let mut tokens: Vec<Token> = Vec::new();
 
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -431,7 +454,7 @@ mod ebnf_parser_tests {
 
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("5", "NUMBER"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -456,8 +479,8 @@ mod ebnf_parser_tests {
         tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -473,8 +496,8 @@ mod ebnf_parser_tests {
         let mut expression_list: Vec<Term> = Vec::new();
 
         expression_list.push(Term::Group(Box::new(vec![
-            Term::Terminal("5".to_string()),
-            Term::Terminal("+".to_string()),
+            Term::TerminalLiteral("5".to_string()),
+            Term::TerminalLiteral("+".to_string()),
             Term::Group(Box::new(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
@@ -497,8 +520,8 @@ mod ebnf_parser_tests {
         tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -516,8 +539,8 @@ mod ebnf_parser_tests {
         let mut expression_list: Vec<Term> = Vec::new();
 
         expression_list.push(Term::Group(Box::new(vec![
-            Term::Terminal("5".to_string()),
-            Term::Terminal("+".to_string()),
+            Term::TerminalLiteral("5".to_string()),
+            Term::TerminalLiteral("+".to_string()),
             Term::Group(Box::new(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
@@ -542,11 +565,11 @@ mod ebnf_parser_tests {
     #[test]
     fn test_production_invalid_production() {
         let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "TERMINAL"));
+        tokens.push(get_token("<test>", "TERMINAL_LITERAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -570,8 +593,8 @@ mod ebnf_parser_tests {
         let mut tokens: Vec<Token> = Vec::new();
         tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -596,8 +619,8 @@ mod ebnf_parser_tests {
         tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));
@@ -614,8 +637,8 @@ mod ebnf_parser_tests {
         let mut expression_list: Vec<Term> = Vec::new();
 
         expression_list.push(Term::Group(Box::new(vec![
-            Term::Terminal("5".to_string()),
-            Term::Terminal("+".to_string()),
+            Term::TerminalLiteral("5".to_string()),
+            Term::TerminalLiteral("+".to_string()),
             Term::Group(Box::new(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
@@ -648,8 +671,8 @@ mod ebnf_parser_tests {
         tokens.push(get_token("<test>", "NON_TERMINAL"));
         tokens.push(get_token("::=", "DEFINES"));
         tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL"));
-        tokens.push(get_token("+", "TERMINAL"));
+        tokens.push(get_token("5", "TERMINAL_LITERAL"));
+        tokens.push(get_token("+", "TERMINAL_LITERAL"));
         tokens.push(get_token("\\(", "LPAREN"));
         tokens.push(get_token("<boolean>", "NON_TERMINAL"));
         tokens.push(get_token("?", "QUESTION"));

@@ -6,7 +6,7 @@ use lexviz::{
 mod ebnf;
 mod grammar;
 
-use color_eyre::eyre::{Report, Result};
+use color_eyre::eyre::Result;
 
 fn get_ebnf_mst_list() -> Vec<(String, String)> {
     let mut ebnf_mst_list: Vec<(String, String)> = Vec::new();
@@ -14,8 +14,9 @@ fn get_ebnf_mst_list() -> Vec<(String, String)> {
     ebnf_mst_list.push(("<[A-Za-z0-9-]+>".to_string(), "NON_TERMINAL".to_string()));
     ebnf_mst_list.push((
         "\"[A-Za-z0-9-:'!+<>=*()]+\"".to_string(),
-        "TERMINAL".to_string(),
+        "TERMINAL_LITERAL".to_string(),
     ));
+    ebnf_mst_list.push(("[A-Z]+".to_string(), "TERMINAL_CATEGORY".to_string()));
     ebnf_mst_list.push(("::=".to_string(), "DEFINES".to_string()));
     ebnf_mst_list.push(("\\|".to_string(), "ALTERNATION".to_string()));
     ebnf_mst_list.push(("\\*".to_string(), "ASTERISK".to_string()));
@@ -32,7 +33,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
-    let diamondback_ebnf = "adder.ebnf".to_string();
+    let diamondback_ebnf = "diamondback.ebnf".to_string();
 
     let syntax_tree_list = parse_microsyntax_list(ebnf_mst_list).unwrap();
 
