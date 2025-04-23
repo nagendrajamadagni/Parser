@@ -1,4 +1,7 @@
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    collections::{HashSet, VecDeque},
+};
 
 use crate::ebnf::Expression;
 pub use crate::ebnf::{Grammar, Production, Term};
@@ -133,7 +136,7 @@ fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
     return Ok(complete_left_productions);
 }
 
-fn check_rhs_non_terminals(grammar: &Grammar) -> Result<()> {
+fn check_completeness(grammar: &Grammar) -> Result<()> {
     let used_rhs_non_terminals = get_rhs_non_terminals(grammar);
 
     let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
@@ -174,7 +177,7 @@ fn check_rhs_non_terminals(grammar: &Grammar) -> Result<()> {
 
 pub fn check_correctness(grammar: &Grammar) -> Result<()> {
     check_goal(grammar)?;
-    check_rhs_non_terminals(grammar)?;
+    check_completeness(grammar)?;
 
     Ok(())
 }
