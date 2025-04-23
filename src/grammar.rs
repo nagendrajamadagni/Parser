@@ -54,7 +54,6 @@ fn get_rhs_non_terminals(
 
     non_terminals.sort();
     non_terminals.dedup();
-    println!("The non terminals on the rhs are {:?}", non_terminals);
 
     return non_terminals;
 }
@@ -163,7 +162,7 @@ fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
 fn check_completeness(
     grammar: &Grammar,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-) -> Result<()> {
+) -> Result<Vec<Term>> {
     let used_rhs_non_terminals = get_rhs_non_terminals(grammar, term_to_non_terminal_map);
 
     let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
@@ -193,7 +192,7 @@ fn check_completeness(
 
     if used_idx == used_rhs_non_terminals.len() {
         // If we checked all the used terms return true
-        return Ok(());
+        return Ok(defined_lhs_non_terminals);
     } else {
         let err = Report::new(GrammarError::ProductionNotDefinedError(
             used_rhs_non_terminals[used_idx].clone(),
@@ -202,12 +201,52 @@ fn check_completeness(
     }
 }
 
+fn check_reachability(
+    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
+    goal: &Term,
+    used_terms: Vec<Term>,
+) -> Result<()> {
+    let mut visited: HashSet<&Term> = HashSet::new();
+    let mut stack: VecDeque<&Term> = VecDeque::new();
+
+    stack.push_front(goal);
+
+    while !stack.is_empty() {
+        let term = stack.pop_front().unwrap();
+        if visited.contains(term) {
+            continue;
+        } else {
+            visited.insert(term);
+        }
+        match term_to_non_terminal_map.get(term) {
+            Some(terms) => {
+                stack.extend(terms.iter());
+            }
+            None => {}
+        }
+    }
+
+    let mut defined_set: HashSet<&Term> = HashSet::new();
+
+    defined_set.extend(used_terms.iter());
+
+    let non_reachable: Vec<&Term> = defined_set.difference(&visited).cloned().collect();
+
+    if !non_reachable.is_empty() {
+        println!("Found some dead code {:?}", non_reachable);
+    }
+    return Ok(());
+}
+
 pub fn check_correctness(grammar: &Grammar) -> Result<()> {
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     check_goal(grammar)?;
-    check_completeness(grammar, &mut term_to_non_terminal_map)?;
-
-    println!("The map obtained is {:?}", term_to_non_terminal_map);
+    let used_terms = check_completeness(grammar, &mut term_to_non_terminal_map)?;
+    check_reachability(
+        &term_to_non_terminal_map,
+        grammar.get_goal().get_left_term(),
+        used_terms,
+    )?;
 
     Ok(())
 }
