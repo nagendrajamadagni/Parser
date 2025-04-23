@@ -25,6 +25,7 @@ fn get_ebnf_mst_list() -> Vec<(String, String)> {
     ebnf_mst_list.push(("\\(".to_string(), "LPAREN".to_string()));
     ebnf_mst_list.push(("\\)".to_string(), "RPAREN".to_string()));
     ebnf_mst_list.push((";".to_string(), "TERMINATION".to_string()));
+    ebnf_mst_list.push(("[ \n\t\r]+".to_string(), "WHITESPACE".to_string()));
 
     return ebnf_mst_list;
 }
@@ -45,7 +46,14 @@ fn main() -> Result<()> {
 
     let scanner = construct_scanner(&minimal_dfa);
 
-    let lexed_output = scanner.scan(diamondback_ebnf, None, true, None).unwrap();
+    let lexed_output = scanner
+        .scan(
+            diamondback_ebnf,
+            None,
+            false,
+            Some(vec!["WHITESPACE".to_string()]),
+        )
+        .unwrap();
 
     let grammar = ebnf::parse_grammar(lexed_output).unwrap();
 
