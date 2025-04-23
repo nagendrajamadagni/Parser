@@ -12,6 +12,7 @@ pub enum GrammarError {
     IncompleteGrammarError(String),
     InvalidGoalError,
     ProductionNotDefinedError(Term),
+    NonProductiveError(Vec<Term>),
 }
 
 impl std::fmt::Display for GrammarError {
@@ -28,6 +29,9 @@ impl std::fmt::Display for GrammarError {
             Self::ProductionNotDefinedError(term) => {
                 write!(f, "Error: Undefined term {:?} encountered", term)
             }
+            Self::NonProductiveError(terms) => {
+                write!(f, "Error: Non productive cycle {:?} detected!", terms)
+            }
         }
     }
 }
@@ -38,11 +42,17 @@ impl std::error::Error for GrammarError {}
 fn get_rhs_non_terminals(
     grammar: &Grammar,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
 ) -> Vec<Term> {
     for production in grammar.get_productions() {
         let lhs = production.get_left_term();
         for expression in production.get_expressions() {
-            get_non_terminals_from_expression(expression, term_to_non_terminal_map, lhs);
+            get_non_terminals_from_expression(
+                expression,
+                term_to_non_terminal_map,
+                term_to_terminal_map,
+                lhs,
+            );
         }
     }
 
@@ -62,10 +72,11 @@ fn get_rhs_non_terminals(
 fn get_non_terminals_from_expression(
     expression: &Expression,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     lhs: &Term,
 ) {
     for term in expression.get_terms() {
-        get_non_terminals_from_term(term, term_to_non_terminal_map, lhs);
+        get_non_terminals_from_term(term, term_to_non_terminal_map, term_to_terminal_map, lhs);
     }
 }
 
@@ -73,6 +84,7 @@ fn get_non_terminals_from_expression(
 fn get_non_terminals_from_term(
     term: &Term,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     lhs: &Term,
 ) {
     match term {
@@ -84,13 +96,23 @@ fn get_non_terminals_from_term(
         }
         Term::Group(terms) => {
             for inner_term in terms.iter() {
-                get_non_terminals_from_term(inner_term, term_to_non_terminal_map, lhs);
+                get_non_terminals_from_term(
+                    inner_term,
+                    term_to_non_terminal_map,
+                    term_to_terminal_map,
+                    lhs,
+                );
             }
         }
         Term::Repetition(term, _) => {
-            get_non_terminals_from_term(term, term_to_non_terminal_map, lhs);
+            get_non_terminals_from_term(term, term_to_non_terminal_map, term_to_terminal_map, lhs);
         }
-        _ => {}
+        Term::TerminalLiteral(_) | Term::TerminalCategory(_) => {
+            term_to_terminal_map
+                .entry(lhs.clone())
+                .or_insert_with(HashSet::new)
+                .insert(term.clone());
+        }
     }
 }
 
@@ -162,8 +184,10 @@ fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
 fn check_completeness(
     grammar: &Grammar,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
 ) -> Result<Vec<Term>> {
-    let used_rhs_non_terminals = get_rhs_non_terminals(grammar, term_to_non_terminal_map);
+    let used_rhs_non_terminals =
+        get_rhs_non_terminals(grammar, term_to_non_terminal_map, term_to_terminal_map);
 
     let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
 
@@ -204,7 +228,7 @@ fn check_completeness(
 fn check_reachability(
     term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
     goal: &Term,
-    used_terms: Vec<Term>,
+    used_terms: &Vec<Term>,
 ) -> Result<()> {
     let mut visited: HashSet<&Term> = HashSet::new();
     let mut stack: VecDeque<&Term> = VecDeque::new();
@@ -238,14 +262,77 @@ fn check_reachability(
     return Ok(());
 }
 
+fn check_productivity(
+    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
+    term_to_terminal_map: &HashMap<Term, HashSet<Term>>,
+    used_terms: &Vec<Term>,
+) -> Result<()> {
+    let mut productive: HashSet<&Term> = HashSet::new();
+
+    for term in term_to_terminal_map.keys() {
+        productive.insert(term);
+    }
+
+    loop {
+        let num_productive = productive.len();
+
+        for term in used_terms {
+            // If the term is already productive continue
+            if productive.contains(term) {
+                continue;
+            }
+
+            if term_to_terminal_map.contains_key(term) {
+                // If the term has atleast one terminal,
+                // mark it as productive
+                productive.insert(term);
+            }
+
+            let non_terminals = term_to_non_terminal_map.get(term).unwrap();
+
+            for non_terminal in non_terminals {
+                if productive.contains(non_terminal) {
+                    productive.insert(term);
+                }
+            }
+        }
+
+        if num_productive == productive.len() {
+            break;
+        }
+    }
+
+    let mut used_set: HashSet<&Term> = HashSet::new();
+    used_set.extend(used_terms);
+    let non_productive: Vec<Term> = used_set.difference(&productive).cloned().cloned().collect();
+
+    if !non_productive.is_empty() {
+        let err = Report::new(GrammarError::NonProductiveError(non_productive));
+        return Err(err);
+    }
+
+    Ok(())
+}
+
 pub fn check_correctness(grammar: &Grammar) -> Result<()> {
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+    let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     check_goal(grammar)?;
-    let used_terms = check_completeness(grammar, &mut term_to_non_terminal_map)?;
+    let used_terms = check_completeness(
+        grammar,
+        &mut term_to_non_terminal_map,
+        &mut term_to_terminal_map,
+    )?;
     check_reachability(
         &term_to_non_terminal_map,
         grammar.get_goal().get_left_term(),
-        used_terms,
+        &used_terms,
+    )?;
+
+    check_productivity(
+        &term_to_non_terminal_map,
+        &term_to_terminal_map,
+        &used_terms,
     )?;
 
     Ok(())
