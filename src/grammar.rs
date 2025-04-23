@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
 };
 
 use crate::ebnf::Expression;
@@ -35,37 +35,61 @@ impl std::fmt::Display for GrammarError {
 impl std::error::Error for GrammarError {}
 
 // Get list of non terminals in rhs of a grammar
-fn get_rhs_non_terminals(grammar: &Grammar) -> Vec<Term> {
-    let mut non_terminals = Vec::new();
-
+fn get_rhs_non_terminals(
+    grammar: &Grammar,
+    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+) -> Vec<Term> {
     for production in grammar.get_productions() {
+        let lhs = production.get_left_term();
         for expression in production.get_expressions() {
-            get_non_terminals_from_expression(expression, &mut non_terminals);
+            get_non_terminals_from_expression(expression, term_to_non_terminal_map, lhs);
         }
     }
+
+    let mut non_terminals: Vec<Term> = term_to_non_terminal_map
+        .values()
+        .flat_map(|set| set.iter())
+        .cloned()
+        .collect();
+
     non_terminals.sort();
     non_terminals.dedup();
+    println!("The non terminals on the rhs are {:?}", non_terminals);
+
     return non_terminals;
 }
 
 // Get list of non terminals from an expression
-fn get_non_terminals_from_expression(expression: &Expression, non_terminals: &mut Vec<Term>) {
+fn get_non_terminals_from_expression(
+    expression: &Expression,
+    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    lhs: &Term,
+) {
     for term in expression.get_terms() {
-        get_non_terminals_from_term(term, non_terminals);
+        get_non_terminals_from_term(term, term_to_non_terminal_map, lhs);
     }
 }
 
 // Get list of non terminals from a term
-fn get_non_terminals_from_term(term: &Term, non_terminals: &mut Vec<Term>) {
+fn get_non_terminals_from_term(
+    term: &Term,
+    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+    lhs: &Term,
+) {
     match term {
-        Term::NonTerminal(_) => non_terminals.push(term.clone()),
+        Term::NonTerminal(_) => {
+            term_to_non_terminal_map
+                .entry(lhs.clone())
+                .or_insert_with(HashSet::new)
+                .insert(term.clone());
+        }
         Term::Group(terms) => {
             for inner_term in terms.iter() {
-                get_non_terminals_from_term(inner_term, non_terminals);
+                get_non_terminals_from_term(inner_term, term_to_non_terminal_map, lhs);
             }
         }
         Term::Repetition(term, _) => {
-            get_non_terminals_from_term(term, non_terminals);
+            get_non_terminals_from_term(term, term_to_non_terminal_map, lhs);
         }
         _ => {}
     }
@@ -136,8 +160,11 @@ fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
     return Ok(complete_left_productions);
 }
 
-fn check_completeness(grammar: &Grammar) -> Result<()> {
-    let used_rhs_non_terminals = get_rhs_non_terminals(grammar);
+fn check_completeness(
+    grammar: &Grammar,
+    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
+) -> Result<()> {
+    let used_rhs_non_terminals = get_rhs_non_terminals(grammar, term_to_non_terminal_map);
 
     let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
 
@@ -176,8 +203,11 @@ fn check_completeness(grammar: &Grammar) -> Result<()> {
 }
 
 pub fn check_correctness(grammar: &Grammar) -> Result<()> {
+    let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     check_goal(grammar)?;
-    check_completeness(grammar)?;
+    check_completeness(grammar, &mut term_to_non_terminal_map)?;
+
+    println!("The map obtained is {:?}", term_to_non_terminal_map);
 
     Ok(())
 }
