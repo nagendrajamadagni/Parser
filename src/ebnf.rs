@@ -1,14 +1,14 @@
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RepetitionType {
     ZeroOrMore,
     OneOrMore,
     ZeroOrOne,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Term {
     TerminalLiteral(String),
     TerminalCategory(String),
@@ -17,12 +17,12 @@ pub enum Term {
     Repetition(Box<Term>, RepetitionType),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expression {
     sequence: Vec<Term>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Expression>,

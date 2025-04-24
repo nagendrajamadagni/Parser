@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::ebnf::Expression;
 pub use crate::ebnf::{Grammar, Production, Term};
@@ -11,7 +8,7 @@ use eyre::{Report, Result};
 pub enum GrammarError {
     IncompleteGrammarError(String),
     InvalidGoalError,
-    ProductionNotDefinedError(Term),
+    ProductionNotDefinedError(Vec<Term>),
     NonProductiveError(Vec<Term>),
 }
 
@@ -27,7 +24,7 @@ impl std::fmt::Display for GrammarError {
                 "Error: Invalid goal term found! Goal term should be a non-terminal with valid productions"
             ),
             Self::ProductionNotDefinedError(term) => {
-                write!(f, "Error: Undefined term {:?} encountered", term)
+                write!(f, "Error: Undefined terms {:?} encountered", term)
             }
             Self::NonProductiveError(terms) => {
                 write!(f, "Error: Non productive cycle {:?} detected!", terms)
@@ -43,7 +40,8 @@ fn get_rhs_non_terminals(
     grammar: &Grammar,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-) -> Vec<Term> {
+) -> HashSet<Term> {
+    let mut non_terminals: HashSet<Term> = HashSet::new();
     for production in grammar.get_productions() {
         let lhs = production.get_left_term();
         for expression in production.get_expressions() {
@@ -56,14 +54,13 @@ fn get_rhs_non_terminals(
         }
     }
 
-    let mut non_terminals: Vec<Term> = term_to_non_terminal_map
+    let non_terminals_list: Vec<Term> = term_to_non_terminal_map
         .values()
         .flat_map(|set| set.iter())
         .cloned()
         .collect();
 
-    non_terminals.sort();
-    non_terminals.dedup();
+    non_terminals.extend(non_terminals_list);
 
     return non_terminals;
 }
@@ -152,8 +149,8 @@ fn check_goal(grammar: &Grammar) -> Result<()> {
 }
 
 // Check if all left hand non-terminal terms have atleast one production term
-fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
-    let mut complete_left_productions = Vec::new();
+fn check_lhs_non_terminals(grammar: &Grammar) -> Result<HashSet<Term>> {
+    let mut complete_left_productions = HashSet::new();
 
     // Get list of left terms which are non-terminal productions
 
@@ -170,67 +167,45 @@ fn check_lhs_non_terminals(grammar: &Grammar) -> Result<Vec<Term>> {
 
     for production in non_terminal_productions {
         match check_non_terminal_productions(production) {
-            Ok(()) => complete_left_productions.push(production.get_left_term().clone()),
+            Ok(()) => complete_left_productions.insert(production.get_left_term().clone()),
             Err(err) => return Err(err),
-        }
+        };
     }
-
-    complete_left_productions.sort();
-    complete_left_productions.dedup();
 
     return Ok(complete_left_productions);
 }
 
+// Check if all non terminals used in the RHS are defined
 fn check_completeness(
     grammar: &Grammar,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-) -> Result<Vec<Term>> {
+) -> Result<HashSet<Term>> {
     let used_rhs_non_terminals =
         get_rhs_non_terminals(grammar, term_to_non_terminal_map, term_to_terminal_map);
 
     let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
 
-    let (mut used_idx, mut defined_idx) = (0, 0);
-
-    while used_idx < used_rhs_non_terminals.len() && defined_idx < defined_lhs_non_terminals.len() {
-        // While i < list1.len and j < list2.len
-        let used = &used_rhs_non_terminals[used_idx];
-        let defined = &defined_lhs_non_terminals[defined_idx];
-
-        match used.cmp(defined) {
-            Ordering::Less => {
-                let err = Report::new(GrammarError::ProductionNotDefinedError(used.clone()));
-                return Err(err);
-            } // There exists a production which is not defined
-            Ordering::Equal => {
-                used_idx = used_idx + 1;
-                defined_idx = defined_idx + 1;
-            } // Advance both pointers
-            Ordering::Greater => {
-                defined_idx = defined_idx + 1;
-            } // There may be some unused productions which come before our
-              // definition, so only advance the defined productions
-        }
-    }
-
-    if used_idx == used_rhs_non_terminals.len() {
-        // If we checked all the used terms return true
+    if used_rhs_non_terminals.is_subset(&defined_lhs_non_terminals) {
         return Ok(defined_lhs_non_terminals);
     } else {
-        let err = Report::new(GrammarError::ProductionNotDefinedError(
-            used_rhs_non_terminals[used_idx].clone(),
-        ));
+        let difference: Vec<_> = used_rhs_non_terminals
+            .difference(&defined_lhs_non_terminals)
+            .cloned()
+            .collect();
+        let err = Report::new(GrammarError::ProductionNotDefinedError(difference));
         return Err(err);
     }
 }
 
+// Check for any dead code
+
 fn check_reachability(
     term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
     goal: &Term,
-    used_terms: &Vec<Term>,
+    defined_terms: &HashSet<Term>,
 ) -> Result<()> {
-    let mut visited: HashSet<&Term> = HashSet::new();
+    let mut visited: HashSet<Term> = HashSet::new();
     let mut stack: VecDeque<&Term> = VecDeque::new();
 
     stack.push_front(goal);
@@ -240,7 +215,7 @@ fn check_reachability(
         if visited.contains(term) {
             continue;
         } else {
-            visited.insert(term);
+            visited.insert(term.clone());
         }
         match term_to_non_terminal_map.get(term) {
             Some(terms) => {
@@ -250,11 +225,7 @@ fn check_reachability(
         }
     }
 
-    let mut defined_set: HashSet<&Term> = HashSet::new();
-
-    defined_set.extend(used_terms.iter());
-
-    let non_reachable: Vec<&Term> = defined_set.difference(&visited).cloned().collect();
+    let non_reachable: Vec<Term> = defined_terms.difference(&visited).cloned().collect();
 
     if !non_reachable.is_empty() {
         println!("Found some dead code {:?}", non_reachable);
@@ -262,21 +233,23 @@ fn check_reachability(
     return Ok(());
 }
 
+// Ensure that there are no unproductive cycles
+
 fn check_productivity(
     term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
     term_to_terminal_map: &HashMap<Term, HashSet<Term>>,
-    used_terms: &Vec<Term>,
+    defined_terms: &HashSet<Term>,
 ) -> Result<()> {
-    let mut productive: HashSet<&Term> = HashSet::new();
+    let mut productive: HashSet<Term> = HashSet::new();
 
     for term in term_to_terminal_map.keys() {
-        productive.insert(term);
+        productive.insert(term.clone());
     }
 
     loop {
         let num_productive = productive.len();
 
-        for term in used_terms {
+        for term in defined_terms {
             // If the term is already productive continue
             if productive.contains(term) {
                 continue;
@@ -284,15 +257,21 @@ fn check_productivity(
 
             if term_to_terminal_map.contains_key(term) {
                 // If the term has atleast one terminal,
-                // mark it as productive
-                productive.insert(term);
+                // mark it as productive and continue
+                productive.insert(term.clone());
+                continue;
             }
+
+            // Get all non_terminals referenced by the term
 
             let non_terminals = term_to_non_terminal_map.get(term).unwrap();
 
             for non_terminal in non_terminals {
+                // If the term has atleast one productive non-terminal, mark it as productive and
+                // continue.
                 if productive.contains(non_terminal) {
-                    productive.insert(term);
+                    productive.insert(term.clone());
+                    continue;
                 }
             }
         }
@@ -302,9 +281,7 @@ fn check_productivity(
         }
     }
 
-    let mut used_set: HashSet<&Term> = HashSet::new();
-    used_set.extend(used_terms);
-    let non_productive: Vec<Term> = used_set.difference(&productive).cloned().cloned().collect();
+    let non_productive: Vec<Term> = defined_terms.difference(&productive).cloned().collect();
 
     if !non_productive.is_empty() {
         let err = Report::new(GrammarError::NonProductiveError(non_productive));
@@ -315,7 +292,9 @@ fn check_productivity(
 }
 
 pub fn check_correctness(grammar: &Grammar) -> Result<()> {
+    // Mapping of the non-terminals found in each term
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+    // Mapping of the terminals found in each term
     let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     check_goal(grammar)?;
     let used_terms = check_completeness(
