@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
@@ -41,7 +41,7 @@ impl fmt::Display for Term {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expression {
     sequence: Vec<Term>,
 }
@@ -55,7 +55,7 @@ impl fmt::Display for Expression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Expression>,
@@ -238,7 +238,7 @@ impl Production {
 
         let lhs = Term::NonTerminal(prod[1..prod.len() - 1].to_string());
 
-        let mut rhs: Vec<Expression> = Vec::new();
+        let mut rhs: HashSet<Expression> = HashSet::new();
 
         let mut expression_start = start + 2; // Skip the defines
 
@@ -246,7 +246,7 @@ impl Production {
             if tokens[pos].get_category() == "ALTERNATION" {
                 let expression = Expression::parse(tokens, expression_start, pos - 1)?;
                 // Parse everything until the alternation as a production rule
-                rhs.push(expression);
+                rhs.insert(expression);
                 expression_start = pos + 1; // Consume the alternation itself
             }
         }
@@ -254,7 +254,8 @@ impl Production {
         // Parse the last production rule before the termination
         let expression = Expression::parse(tokens, expression_start, end)?;
 
-        rhs.push(expression);
+        rhs.insert(expression);
+        let rhs: Vec<Expression> = rhs.into_iter().collect();
 
         Ok(Production { lhs, rhs })
     }
@@ -303,7 +304,6 @@ impl Grammar {
 /// Read an EBNF file and return the Grammar structure
 pub fn parse_grammar(token_list: Vec<Token>) -> Result<Grammar> {
     let parsed_grammar = Grammar::parse(token_list)?;
-    println!("The parsed grammar is\n{}", parsed_grammar);
 
     return Ok(parsed_grammar);
 }
