@@ -1,3 +1,5 @@
+use std::fmt;
+
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
 
@@ -17,9 +19,40 @@ pub enum Term {
     Repetition(Box<Term>, RepetitionType),
 }
 
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TerminalLiteral(literal) => write!(f, "{}", literal),
+            Self::TerminalCategory(category) => write!(f, "{}", category),
+            Self::NonTerminal(non_terminal) => write!(f, "<{}>", non_terminal),
+            Self::Group(inner_terms) => {
+                write!(f, "(")?;
+                for term in inner_terms.iter() {
+                    write!(f, "{}", term)?;
+                }
+                write!(f, ")")
+            }
+            Self::Repetition(term, repetition_type) => match repetition_type {
+                RepetitionType::ZeroOrOne => write!(f, "{}?", term),
+                RepetitionType::OneOrMore => write!(f, "{}+", term),
+                RepetitionType::ZeroOrMore => write!(f, "{}*", term),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expression {
     sequence: Vec<Term>,
+}
+
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for term in self.sequence.iter() {
+            write!(f, "{} ", term)?;
+        }
+        return Ok(());
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +65,24 @@ pub struct Production {
 pub struct Grammar {
     goal: Production,
     productions: Vec<Production>,
+}
+
+impl fmt::Display for Grammar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for production in self.productions.iter() {
+            let lhs = production.get_left_term();
+            write!(f, "{} ::= ", lhs)?;
+            let expressions = production.get_expressions();
+            for (idx, expression) in expressions.iter().enumerate() {
+                write!(f, "{} ", expression)?;
+                if idx != expressions.len() - 1 {
+                    write!(f, "| ")?;
+                }
+            }
+            write!(f, ";\n")?;
+        }
+        return Ok(());
+    }
 }
 
 #[derive(Debug)]
@@ -252,7 +303,7 @@ impl Grammar {
 /// Read an EBNF file and return the Grammar structure
 pub fn parse_grammar(token_list: Vec<Token>) -> Result<Grammar> {
     let parsed_grammar = Grammar::parse(token_list)?;
-    //println!("The parsed grammar is {:?}", parsed_grammar);
+    println!("The parsed grammar is\n{}", parsed_grammar);
 
     return Ok(parsed_grammar);
 }
