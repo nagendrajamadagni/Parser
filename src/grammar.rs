@@ -5,6 +5,13 @@ pub use crate::ebnf::{Grammar, Production, Term};
 use eyre::{Report, Result};
 
 #[derive(Debug)]
+pub struct VerifiedGrammar {
+    grammar: Grammar,
+    term_to_terminal_map: HashMap<Term, HashSet<Term>>,
+    term_to_non_terminal_map: HashMap<Term, HashSet<Term>>,
+}
+
+#[derive(Debug)]
 pub enum GrammarError {
     IncompleteGrammarError(String),
     ProductionNotDefinedError(Vec<Term>),
@@ -277,7 +284,7 @@ fn check_productivity(
     Ok(())
 }
 
-pub fn check_correctness(grammar: &Grammar) -> Result<()> {
+pub fn check_correctness(grammar: &Grammar) -> Result<VerifiedGrammar> {
     // Mapping of the non-terminals found in each term
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     // Mapping of the terminals found in each term
@@ -299,7 +306,18 @@ pub fn check_correctness(grammar: &Grammar) -> Result<()> {
         &used_terms,
     )?;
 
-    Ok(())
+    let verified_grammar = VerifiedGrammar {
+        grammar: grammar.clone(),
+        term_to_terminal_map: term_to_terminal_map.clone(),
+        term_to_non_terminal_map: term_to_non_terminal_map.clone(),
+    };
+
+    println!(
+        "The verified grammar is {}, the term to non terminal mapping is {:?} and the term to terminal mapping is {:?} and the used terms are {:?}",
+        grammar, term_to_non_terminal_map, term_to_terminal_map, used_terms
+    );
+
+    Ok(verified_grammar)
 }
 
 mod grammar_tests_helper {
