@@ -5,13 +5,6 @@ pub use crate::ebnf::{Grammar, Production, Term};
 use eyre::{Report, Result};
 
 #[derive(Debug)]
-pub struct VerifiedGrammar {
-    grammar: Grammar,
-    term_to_terminal_map: HashMap<Term, HashSet<Term>>,
-    term_to_non_terminal_map: HashMap<Term, HashSet<Term>>,
-}
-
-#[derive(Debug)]
 pub enum GrammarError {
     IncompleteGrammarError(String),
     ProductionNotDefinedError(Vec<Term>),
@@ -197,7 +190,7 @@ fn check_reachability(
     term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
     goal: &Term,
     defined_terms: &HashSet<Term>,
-) -> Result<()> {
+) -> Result<Vec<Term>> {
     let mut visited: HashSet<Term> = HashSet::new();
     let mut stack: VecDeque<&Term> = VecDeque::new();
 
@@ -223,7 +216,7 @@ fn check_reachability(
     if !non_reachable.is_empty() {
         println!("Found some dead code {:?}", non_reachable);
     }
-    return Ok(());
+    return Ok(non_reachable);
 }
 
 // Ensure that there are no unproductive cycles
@@ -284,21 +277,32 @@ fn check_productivity(
     Ok(())
 }
 
-pub fn check_correctness(grammar: &Grammar) -> Result<VerifiedGrammar> {
+pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     // Mapping of the non-terminals found in each term
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     // Mapping of the terminals found in each term
     let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
-    let used_terms = check_completeness(
+    let mut used_terms = check_completeness(
         grammar,
         &mut term_to_non_terminal_map,
         &mut term_to_terminal_map,
     )?;
-    check_reachability(
+
+    let unused_terms = check_reachability(
         &term_to_non_terminal_map,
         grammar.get_goal().get_left_term(),
         &used_terms,
     )?;
+
+    grammar.remove_production(&unused_terms);
+
+    for term in unused_terms {
+        term_to_non_terminal_map.remove(&term);
+        term_to_terminal_map.remove(&term);
+        used_terms.remove(&term);
+    }
+
+    println!("The term to terminal map is {:?}", term_to_terminal_map);
 
     check_productivity(
         &term_to_non_terminal_map,
@@ -306,20 +310,10 @@ pub fn check_correctness(grammar: &Grammar) -> Result<VerifiedGrammar> {
         &used_terms,
     )?;
 
-    let verified_grammar = VerifiedGrammar {
-        grammar: grammar.clone(),
-        term_to_terminal_map: term_to_terminal_map.clone(),
-        term_to_non_terminal_map: term_to_non_terminal_map.clone(),
-    };
-
-    println!(
-        "The verified grammar is {}, the term to non terminal mapping is {:?} and the term to terminal mapping is {:?} and the used terms are {:?}",
-        grammar, term_to_non_terminal_map, term_to_terminal_map, used_terms
-    );
-
-    Ok(verified_grammar)
+    Ok(())
 }
 
+#[cfg(test)]
 mod grammar_tests_helper {
     use lexviz::scanner::Token;
 

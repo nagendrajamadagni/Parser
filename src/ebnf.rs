@@ -270,6 +270,18 @@ impl Grammar {
         return &self.productions;
     }
 
+    pub fn remove_production(&mut self, removal_list: &Vec<Term>) {
+        for prod in removal_list {
+            if let Some(pos) = self
+                .productions
+                .iter()
+                .position(|x| *x.get_left_term() == *prod)
+            {
+                self.productions.remove(pos);
+            }
+        }
+    }
+
     fn parse(token_list: Vec<Token>) -> Result<Self> {
         let mut production_start = 0;
         let mut production_end = 0;

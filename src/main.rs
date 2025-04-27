@@ -55,8 +55,8 @@ fn main() -> Result<()> {
         )
         .unwrap();
 
-    let grammar = ebnf::parse_grammar(lexed_output).unwrap();
+    let mut grammar = ebnf::parse_grammar(lexed_output).unwrap();
 
-    check_correctness(&grammar)?;
+    check_correctness(&mut grammar)?;
     Ok(())
 }
