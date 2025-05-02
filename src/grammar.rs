@@ -229,6 +229,7 @@ fn check_productivity(
     let mut productive: HashSet<Term> = HashSet::new();
 
     for term in term_to_terminal_map.keys() {
+        // Mark all terminal terms as productive
         productive.insert(term.clone());
     }
 
@@ -277,12 +278,14 @@ fn check_productivity(
     Ok(())
 }
 
+fn get_unit_non_terminals(grammar: &Grammar) {}
+
 pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     // Mapping of the non-terminals found in each term
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     // Mapping of the terminals found in each term
     let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
-    let mut used_terms = check_completeness(
+    let mut defined_terms = check_completeness(
         grammar,
         &mut term_to_non_terminal_map,
         &mut term_to_terminal_map,
@@ -291,7 +294,7 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     let unused_terms = check_reachability(
         &term_to_non_terminal_map,
         grammar.get_goal().get_left_term(),
-        &used_terms,
+        &defined_terms,
     )?;
 
     grammar.remove_production(&unused_terms);
@@ -299,7 +302,7 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     for term in unused_terms {
         term_to_non_terminal_map.remove(&term);
         term_to_terminal_map.remove(&term);
-        used_terms.remove(&term);
+        defined_terms.remove(&term);
     }
 
     println!("The term to terminal map is {:?}", term_to_terminal_map);
@@ -307,7 +310,7 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     check_productivity(
         &term_to_non_terminal_map,
         &term_to_terminal_map,
-        &used_terms,
+        &defined_terms,
     )?;
 
     Ok(())
