@@ -350,6 +350,8 @@ mod ebnf_parser_test_helpers {
 #[cfg(test)]
 
 mod ebnf_parser_tests {
+    use std::collections::HashSet;
+
     use crate::ebnf::{
         Grammar, ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
     };
@@ -589,6 +591,7 @@ mod ebnf_parser_tests {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![Expression {
                 sequence: expression_list,
+                unit_non_terminal: false,
             }],
         };
 
@@ -633,14 +636,29 @@ mod ebnf_parser_tests {
             rhs: vec![
                 Expression {
                     sequence: expression_list,
+                    unit_non_terminal: false,
                 },
                 Expression {
                     sequence: vec![Term::NonTerminal("6".to_string())],
+                    unit_non_terminal: true,
                 },
             ],
         };
 
-        assert_eq!(expected_production, production);
+        let left_term = production.get_left_term();
+
+        let expected_left_term = expected_production.get_left_term();
+
+        assert_eq!(left_term, expected_left_term);
+
+        let expressions: HashSet<_> = production.get_expressions().iter().cloned().collect();
+        let expected_expressions: HashSet<_> = expected_production
+            .get_expressions()
+            .iter()
+            .cloned()
+            .collect();
+
+        assert_eq!(expressions, expected_expressions);
     }
 
     #[test]
@@ -730,6 +748,7 @@ mod ebnf_parser_tests {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![Expression {
                 sequence: expression_list.clone(),
+                unit_non_terminal: false,
             }],
         };
 
@@ -738,6 +757,7 @@ mod ebnf_parser_tests {
                 lhs: Term::NonTerminal("test".to_string()),
                 rhs: vec![Expression {
                     sequence: expression_list,
+                    unit_non_terminal: false,
                 }],
             },
             productions: vec![expected_production],
