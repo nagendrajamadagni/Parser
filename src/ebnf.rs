@@ -44,6 +44,7 @@ impl fmt::Display for Term {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expression {
     sequence: Vec<Term>,
+    unit_non_terminal: bool,
 }
 
 impl fmt::Display for Expression {
@@ -124,6 +125,11 @@ impl Expression {
     pub fn get_terms(&self) -> &Vec<Term> {
         &self.sequence
     }
+
+    pub fn is_non_terminal_unit(&self) -> bool {
+        self.unit_non_terminal
+    }
+
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
         let mut sequence: Vec<Term> = Vec::new();
 
@@ -206,7 +212,19 @@ impl Expression {
             sequence.push(term);
         }
 
-        Ok(Expression { sequence })
+        let is_unit_non_terminal = if sequence.len() == 1 {
+            match sequence[0] {
+                Term::NonTerminal(_) => true,
+                _ => false,
+            }
+        } else {
+            false
+        };
+
+        Ok(Expression {
+            sequence,
+            unit_non_terminal: is_unit_non_terminal,
+        })
     }
 }
 
