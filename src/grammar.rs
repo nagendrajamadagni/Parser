@@ -278,7 +278,58 @@ fn check_productivity(
     Ok(())
 }
 
-fn get_unit_non_terminals(grammar: &Grammar) {}
+fn get_unit_non_terminals(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
+    let productions = grammar.get_productions();
+
+    let mut unit_productions: HashMap<Term, Vec<Term>> = HashMap::new();
+
+    for production in productions {
+        let left_term = production.get_left_term();
+        let terms = production
+            .get_expressions()
+            .iter()
+            .filter(|exp| exp.is_non_terminal_unit())
+            .filter_map(|exp| exp.get_terms().first())
+            .cloned()
+            .collect::<Vec<_>>();
+        if !terms.is_empty() {
+            unit_productions
+                .entry(left_term.clone())
+                .or_default()
+                .extend(terms);
+        }
+    }
+    println!("The unit non terminals are {:?}", unit_productions);
+
+    return unit_productions;
+}
+
+fn get_transitive_closures(
+    unit_productions_map: &HashMap<Term, Vec<Term>>,
+) -> HashMap<Term, HashSet<Term>> {
+    //???
+    let mut transitive_closure_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+    for production in unit_productions_map {
+        let mut stack: VecDeque<&Term> = VecDeque::new();
+        let key = production.0;
+        let values = production.1;
+
+        stack.extend(values);
+
+        while !stack.is_empty() {
+            let elem = stack.pop_front().unwrap();
+            transitive_closure_map
+                .entry(key.clone())
+                .or_insert_with(HashSet::new)
+                .insert(elem.clone());
+        }
+
+        //println!("The key is {:?} and the value is {:?}", key, value);
+    }
+
+    return transitive_closure_map;
+}
 
 pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     // Mapping of the non-terminals found in each term
@@ -305,13 +356,17 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
         defined_terms.remove(&term);
     }
 
-    println!("The term to terminal map is {:?}", term_to_terminal_map);
-
     check_productivity(
         &term_to_non_terminal_map,
         &term_to_terminal_map,
         &defined_terms,
     )?;
+
+    let unit_non_terminals = get_unit_non_terminals(grammar);
+
+    println!("The unit non terminals is {:?}", unit_non_terminals);
+
+    //let transitive_closures = get_transitive_closures(&unit_non_terminals);
 
     Ok(())
 }

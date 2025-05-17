@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
-    let diamondback_ebnf = "diamondback.ebnf".to_string();
+    let diamondback_ebnf = "unit_productions.ebnf".to_string();
 
     let syntax_tree_list = parse_microsyntax_list(ebnf_mst_list).unwrap();
 
