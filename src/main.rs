@@ -9,25 +9,25 @@ mod grammar;
 use color_eyre::eyre::Result;
 
 fn get_ebnf_mst_list() -> Vec<(String, String)> {
-    let mut ebnf_mst_list: Vec<(String, String)> = Vec::new();
+    let ebnf_mst_list: Vec<(String, String)> = vec![
+        ("<[A-Za-z0-9-]+>".to_string(), "NON_TERMINAL".to_string()),
+        (
+            "\"[A-Za-z0-9-:'!+<>=*()]+\"".to_string(),
+            "TERMINAL_LITERAL".to_string(),
+        ),
+        ("[A-Z]+".to_string(), "TERMINAL_CATEGORY".to_string()),
+        ("::=".to_string(), "DEFINES".to_string()),
+        ("\\|".to_string(), "ALTERNATION".to_string()),
+        ("\\*".to_string(), "ASTERISK".to_string()),
+        ("\\+".to_string(), "PLUS".to_string()),
+        ("\\?".to_string(), "QUESTION".to_string()),
+        ("\\(".to_string(), "LPAREN".to_string()),
+        ("\\)".to_string(), "RPAREN".to_string()),
+        (";".to_string(), "TERMINATION".to_string()),
+        ("[ \n\t\r]+".to_string(), "WHITESPACE".to_string()),
+    ];
 
-    ebnf_mst_list.push(("<[A-Za-z0-9-]+>".to_string(), "NON_TERMINAL".to_string()));
-    ebnf_mst_list.push((
-        "\"[A-Za-z0-9-:'!+<>=*()]+\"".to_string(),
-        "TERMINAL_LITERAL".to_string(),
-    ));
-    ebnf_mst_list.push(("[A-Z]+".to_string(), "TERMINAL_CATEGORY".to_string()));
-    ebnf_mst_list.push(("::=".to_string(), "DEFINES".to_string()));
-    ebnf_mst_list.push(("\\|".to_string(), "ALTERNATION".to_string()));
-    ebnf_mst_list.push(("\\*".to_string(), "ASTERISK".to_string()));
-    ebnf_mst_list.push(("\\+".to_string(), "PLUS".to_string()));
-    ebnf_mst_list.push(("\\?".to_string(), "QUESTION".to_string()));
-    ebnf_mst_list.push(("\\(".to_string(), "LPAREN".to_string()));
-    ebnf_mst_list.push(("\\)".to_string(), "RPAREN".to_string()));
-    ebnf_mst_list.push((";".to_string(), "TERMINATION".to_string()));
-    ebnf_mst_list.push(("[ \n\t\r]+".to_string(), "WHITESPACE".to_string()));
-
-    return ebnf_mst_list;
+    ebnf_mst_list
 }
 
 fn main() -> Result<()> {

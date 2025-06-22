@@ -15,7 +15,7 @@ pub enum Term {
     TerminalLiteral(String),
     TerminalCategory(String),
     NonTerminal(String),
-    Group(Box<Vec<Term>>),
+    Group(Vec<Term>),
     Repetition(Box<Term>, RepetitionType),
 }
 
@@ -52,7 +52,7 @@ impl fmt::Display for Expression {
         for term in self.sequence.iter() {
             write!(f, "{} ", term)?;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -80,26 +80,26 @@ impl fmt::Display for Grammar {
                     write!(f, "| ")?;
                 }
             }
-            write!(f, ";\n")?;
+            writeln!(f, ";")?;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub enum ParseError {
-    IncompleteProductionError,
+    IncompleteProduction,
     MultipleLeftProductions(String, String),
     InvalidProductionLHS(String),
-    UnbalancedParenError,
-    InvalidTokenErr(String),
+    UnbalancedParen,
+    InvalidToken(String),
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParseError::UnbalancedParenError => write!(f, "Error: Unbalanced parenthesis!"),
-            ParseError::IncompleteProductionError => {
+            ParseError::UnbalancedParen => write!(f, "Error: Unbalanced parenthesis!"),
+            ParseError::IncompleteProduction => {
                 write!(f, "Error: Production definition is incomplete!")
             }
             ParseError::InvalidProductionLHS(prod) => write!(
@@ -107,7 +107,7 @@ impl std::fmt::Display for ParseError {
                 "Error: {} is not a valid left side for a production!",
                 prod
             ),
-            ParseError::InvalidTokenErr(token) => {
+            ParseError::InvalidToken(token) => {
                 write!(f, "Error: {} is not a valid token!", token)
             }
             ParseError::MultipleLeftProductions(term1, term2) => write!(
@@ -169,16 +169,16 @@ impl Expression {
                     }
 
                     if depth != 0 {
-                        let err = Report::new(ParseError::UnbalancedParenError);
+                        let err = Report::new(ParseError::UnbalancedParen);
                         return Err(err);
                     }
 
                     let inner_expression = Expression::parse(tokens, idx + 1, rparen_idx - 1)?;
                     idx = rparen_idx;
-                    Term::Group(Box::new(inner_expression.sequence))
+                    Term::Group(inner_expression.sequence)
                 }
                 _ => {
-                    let err = Report::new(ParseError::InvalidTokenErr(
+                    let err = Report::new(ParseError::InvalidToken(
                         tokens[idx].get_token().to_string(),
                     ));
                     return Err(err);
@@ -213,10 +213,7 @@ impl Expression {
         }
 
         let is_unit_non_terminal = if sequence.len() == 1 {
-            match sequence[0] {
-                Term::NonTerminal(_) => true,
-                _ => false,
-            }
+            matches!(sequence[0], Term::NonTerminal(_))
         } else {
             false
         };
@@ -230,11 +227,11 @@ impl Expression {
 
 impl Production {
     pub fn get_expressions(&self) -> &Vec<Expression> {
-        return &self.rhs;
+        &self.rhs
     }
 
     pub fn get_left_term(&self) -> &Term {
-        return &self.lhs;
+        &self.lhs
     }
 
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
@@ -281,11 +278,11 @@ impl Production {
 
 impl Grammar {
     pub fn get_goal(&self) -> &Production {
-        return &self.goal;
+        &self.goal
     }
 
     pub fn get_productions(&self) -> &Vec<Production> {
-        return &self.productions;
+        &self.productions
     }
 
     pub fn remove_production(&mut self, removal_list: &Vec<Term>) {
@@ -320,7 +317,7 @@ impl Grammar {
 
         // If we reach end of file before completing a production throw an error
         if production_end != token_list.len() - 1 {
-            let err = Report::new(ParseError::IncompleteProductionError);
+            let err = Report::new(ParseError::IncompleteProduction);
             return Err(err);
         }
 
@@ -335,11 +332,10 @@ impl Grammar {
 pub fn parse_grammar(token_list: Vec<Token>) -> Result<Grammar> {
     let parsed_grammar = Grammar::parse(token_list)?;
 
-    return Ok(parsed_grammar);
+    Ok(parsed_grammar)
 }
 
 #[cfg(test)]
-
 mod ebnf_parser_test_helpers {
     use lexviz::scanner::Token;
 
@@ -347,8 +343,8 @@ mod ebnf_parser_test_helpers {
         Token::new(token.to_string(), category.to_string())
     }
 }
-#[cfg(test)]
 
+#[cfg(test)]
 mod ebnf_parser_tests {
     use std::collections::HashSet;
 
@@ -361,9 +357,7 @@ mod ebnf_parser_tests {
 
     #[test]
     fn test_expression_parse_terminal() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("true", "TERMINAL_LITERAL"));
+        let tokens: Vec<Token> = vec![get_token("true", "TERMINAL_LITERAL")];
 
         let expression = Expression::parse(&tokens, 0, 0);
 
@@ -373,18 +367,14 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::TerminalLiteral("true".to_string()));
+        let expected_list: Vec<Term> = vec![Term::TerminalLiteral("true".to_string())];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_parse_terminal_category() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("NUMBER", "TERMINAL_CATEGORY"));
+        let tokens: Vec<Token> = vec![get_token("NUMBER", "TERMINAL_CATEGORY")];
 
         let expression = Expression::parse(&tokens, 0, 0);
 
@@ -394,18 +384,14 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::TerminalCategory("NUMBER".to_string()));
+        let expected_list: Vec<Term> = vec![Term::TerminalCategory("NUMBER".to_string())];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_parse_non_terminal() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
+        let tokens: Vec<Token> = vec![get_token("<boolean>", "NON_TERMINAL")];
 
         let expression = Expression::parse(&tokens, 0, 0);
 
@@ -415,19 +401,17 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::NonTerminal("boolean".to_string()));
+        let expected_list: Vec<Term> = vec![Term::NonTerminal("boolean".to_string())];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_parse_terminal_repeat() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("true", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\*", "ASTERISK"));
+        let tokens: Vec<Token> = vec![
+            get_token("true", "TERMINAL_LITERAL"),
+            get_token("\\*", "ASTERISK"),
+        ];
 
         let expression = Expression::parse(&tokens, 0, 1);
 
@@ -437,22 +421,20 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::Repetition(
+        let expected_list: Vec<Term> = vec![Term::Repetition(
             Box::new(Term::TerminalLiteral("true".to_string())),
             RepetitionType::ZeroOrMore,
-        ));
+        )];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_parse_non_terminal_repeat() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("\\+", "PLUS"));
+        let tokens: Vec<Token> = vec![
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("\\+", "PLUS"),
+        ];
 
         let expression = Expression::parse(&tokens, 0, 1);
 
@@ -462,28 +444,26 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::Repetition(
+        let expected_list: Vec<Term> = vec![Term::Repetition(
             Box::new(Term::NonTerminal("boolean".to_string())),
             RepetitionType::OneOrMore,
-        ));
+        )];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_parse_group() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
 
@@ -493,31 +473,29 @@ mod ebnf_parser_tests {
 
         let sequence = expression.sequence;
 
-        let mut expected_list: Vec<Term> = Vec::new();
-
-        expected_list.push(Term::Group(Box::new(vec![
+        let expected_list: Vec<Term> = vec![Term::Group(vec![
             Term::TerminalLiteral("5".to_string()),
             Term::TerminalLiteral("+".to_string()),
-            Term::Group(Box::new(vec![Term::Repetition(
+            Term::Group(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
-            )])),
-        ])));
+            )]),
+        ])];
 
         assert_eq!(sequence, expected_list);
     }
 
     #[test]
     fn test_expression_unbalanced_paren() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+        ];
 
         let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
 
@@ -526,23 +504,23 @@ mod ebnf_parser_tests {
         let expression = expression.unwrap_err();
 
         match expression.downcast_ref().unwrap() {
-            ParseError::UnbalancedParenError => assert!(true),
-            _ => assert!(false),
+            ParseError::UnbalancedParen => {}
+            _ => unreachable!(),
         }
     }
 
     #[test]
     fn test_expression_invalid_token() {
-        let mut tokens: Vec<Token> = Vec::new();
-
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "NUMBER"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("\\(", "LPAREN"),
+            get_token("5", "NUMBER"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
 
@@ -551,24 +529,25 @@ mod ebnf_parser_tests {
         let expression = expression.unwrap_err();
 
         match expression.downcast_ref().unwrap() {
-            ParseError::InvalidTokenErr(_) => assert!(true),
-            _ => assert!(false),
+            ParseError::InvalidToken(_) => {}
+            _ => unreachable!(),
         }
     }
 
     #[test]
     fn test_production() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "NON_TERMINAL"));
-        tokens.push(get_token("::=", "DEFINES"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let production = Production::parse(&tokens, 0, tokens.len() - 1);
 
@@ -576,16 +555,14 @@ mod ebnf_parser_tests {
 
         let production = production.unwrap();
 
-        let mut expression_list: Vec<Term> = Vec::new();
-
-        expression_list.push(Term::Group(Box::new(vec![
+        let expression_list: Vec<Term> = vec![Term::Group(vec![
             Term::TerminalLiteral("5".to_string()),
             Term::TerminalLiteral("+".to_string()),
-            Term::Group(Box::new(vec![Term::Repetition(
+            Term::Group(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
-            )])),
-        ])));
+            )]),
+        ])];
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
@@ -600,19 +577,20 @@ mod ebnf_parser_tests {
 
     #[test]
     fn test_production_alternation() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "NON_TERMINAL"));
-        tokens.push(get_token("::=", "DEFINES"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token("\\|", "ALTERNATION"));
-        tokens.push(get_token("<6>", "NON_TERMINAL"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+            get_token("\\|", "ALTERNATION"),
+            get_token("<6>", "NON_TERMINAL"),
+        ];
 
         let production = Production::parse(&tokens, 0, tokens.len() - 1);
 
@@ -620,16 +598,14 @@ mod ebnf_parser_tests {
 
         let production = production.unwrap();
 
-        let mut expression_list: Vec<Term> = Vec::new();
-
-        expression_list.push(Term::Group(Box::new(vec![
+        let expression_list: Vec<Term> = vec![Term::Group(vec![
             Term::TerminalLiteral("5".to_string()),
             Term::TerminalLiteral("+".to_string()),
-            Term::Group(Box::new(vec![Term::Repetition(
+            Term::Group(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
-            )])),
-        ])));
+            )]),
+        ])];
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
@@ -663,17 +639,18 @@ mod ebnf_parser_tests {
 
     #[test]
     fn test_production_invalid_production() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "TERMINAL_LITERAL"));
-        tokens.push(get_token("::=", "DEFINES"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "TERMINAL_LITERAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let production = Production::parse(&tokens, 0, tokens.len() - 1);
 
@@ -682,23 +659,24 @@ mod ebnf_parser_tests {
         let result = production.unwrap_err();
 
         match result.downcast_ref().unwrap() {
-            ParseError::InvalidProductionLHS(_) => assert!(true),
-            _ => assert!(false),
+            ParseError::InvalidProductionLHS(_) => {}
+            _ => unreachable!(),
         }
     }
 
     #[test]
     fn test_production_missing_defines() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "NON_TERMINAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let production = Production::parse(&tokens, 0, tokens.len() - 1);
 
@@ -707,25 +685,26 @@ mod ebnf_parser_tests {
         let result = production.unwrap_err();
 
         match result.downcast_ref().unwrap() {
-            ParseError::MultipleLeftProductions(_, _) => assert!(true),
-            _ => assert!(false),
+            ParseError::MultipleLeftProductions(_, _) => {}
+            _ => unreachable!(),
         }
     }
 
     #[test]
     fn test_grammar() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "NON_TERMINAL"));
-        tokens.push(get_token("::=", "DEFINES"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(";", "TERMINATION"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+            get_token(";", "TERMINATION"),
+        ];
 
         let grammar = Grammar::parse(tokens);
 
@@ -733,16 +712,14 @@ mod ebnf_parser_tests {
 
         let grammar = grammar.unwrap();
 
-        let mut expression_list: Vec<Term> = Vec::new();
-
-        expression_list.push(Term::Group(Box::new(vec![
+        let expression_list: Vec<Term> = vec![Term::Group(vec![
             Term::TerminalLiteral("5".to_string()),
             Term::TerminalLiteral("+".to_string()),
-            Term::Group(Box::new(vec![Term::Repetition(
+            Term::Group(vec![Term::Repetition(
                 Box::new(Term::NonTerminal("boolean".to_string())),
                 RepetitionType::ZeroOrOne,
-            )])),
-        ])));
+            )]),
+        ])];
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
@@ -768,17 +745,18 @@ mod ebnf_parser_tests {
 
     #[test]
     fn test_grammar_incomplete_production() {
-        let mut tokens: Vec<Token> = Vec::new();
-        tokens.push(get_token("<test>", "NON_TERMINAL"));
-        tokens.push(get_token("::=", "DEFINES"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("5", "TERMINAL_LITERAL"));
-        tokens.push(get_token("+", "TERMINAL_LITERAL"));
-        tokens.push(get_token("\\(", "LPAREN"));
-        tokens.push(get_token("<boolean>", "NON_TERMINAL"));
-        tokens.push(get_token("?", "QUESTION"));
-        tokens.push(get_token(")", "RPAREN"));
-        tokens.push(get_token(")", "RPAREN"));
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\\(", "LPAREN"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("+", "TERMINAL_LITERAL"),
+            get_token("\\(", "LPAREN"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(")", "RPAREN"),
+            get_token(")", "RPAREN"),
+        ];
 
         let grammar = Grammar::parse(tokens);
 
@@ -787,8 +765,8 @@ mod ebnf_parser_tests {
         let result = grammar.unwrap_err();
 
         match result.downcast_ref().unwrap() {
-            ParseError::IncompleteProductionError => assert!(true),
-            _ => assert!(false),
+            ParseError::IncompleteProduction => {}
+            _ => unreachable!(),
         }
     }
 }
