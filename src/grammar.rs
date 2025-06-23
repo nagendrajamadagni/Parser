@@ -247,14 +247,24 @@ fn check_productivity(
 
             let non_terminals = term_to_non_terminal_map.get(term).unwrap();
 
-            for non_terminal in non_terminals {
-                // If the term has atleast one productive non-terminal, mark it as productive and
-                // continue.
-                if productive.contains(non_terminal) {
-                    productive.insert(term.clone());
-                    continue;
-                }
+            let all_present = non_terminals
+                .iter()
+                .all(|non_terminal| productive.contains(non_terminal));
+
+            if all_present {
+                productive.insert(term.clone());
             }
+
+            // This below check marks a non terminal as productive if it has atleast one productive
+            // non terminal the above check is stricter.
+            // for non_terminal in non_terminals {
+            //     // If the term has atleast one productive non-terminal, mark it as productive and
+            //     // continue.
+            //     if productive.contains(non_terminal) {
+            //         productive.insert(term.clone());
+            //         continue;
+            //     }
+            // }
         }
 
         if num_productive == productive.len() {
@@ -293,7 +303,6 @@ fn get_unit_non_terminals(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
                 .extend(terms);
         }
     }
-    println!("The unit non terminals are {:?}", unit_productions);
 
     unit_productions
 }
@@ -318,8 +327,6 @@ fn get_transitive_closures(
                 .or_default()
                 .insert(elem.clone());
         }
-
-        //println!("The key is {:?} and the value is {:?}", key, value);
     }
 
     transitive_closure_map
