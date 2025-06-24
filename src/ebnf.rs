@@ -350,7 +350,7 @@ mod ebnf_parser_test_helpers {
 
 #[cfg(test)]
 mod ebnf_parser_tests {
-    use std::collections::HashSet;
+    use std::collections::HashMap;
 
     use crate::ebnf::{
         Grammar, ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
@@ -725,5 +725,110 @@ mod ebnf_parser_tests {
             ParseError::IncompleteProduction => {}
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_production_unit_non_terminals() {
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token("\\|", "ALTERNATION"),
+            get_token("<C>", "NON_TERMINAL"),
+        ];
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_ok());
+
+        let production = production.unwrap();
+
+        let unit_non_terminals = production.get_unit_non_terminals();
+
+        let expected_list = vec![Term::NonTerminal("C".to_string())];
+
+        assert_eq!(unit_non_terminals, expected_list);
+    }
+
+    #[test]
+    fn test_production_unit_no_non_terminals() {
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+        ];
+
+        let production = Production::parse(&tokens, 0, tokens.len() - 1);
+
+        assert!(production.is_ok());
+
+        let production = production.unwrap();
+
+        let unit_non_terminals = production.get_unit_non_terminals();
+
+        assert!(unit_non_terminals.is_empty());
+    }
+
+    #[test]
+    fn test_grammar_unit_non_terminals() {
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token("\\|", "ALTERNATION"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let grammar = Grammar::parse(tokens);
+
+        assert!(grammar.is_ok());
+
+        let grammar = grammar.unwrap();
+
+        let unit_non_terminals = grammar.get_unit_non_terminals();
+
+        assert!(unit_non_terminals.is_some());
+
+        let unit_non_terminals = unit_non_terminals.unwrap();
+
+        let expected_map = HashMap::from([(
+            Term::NonTerminal("A".to_string()),
+            vec![Term::NonTerminal("C".to_string())],
+        )]);
+
+        assert_eq!(unit_non_terminals, expected_map);
+    }
+
+    #[test]
+    fn test_grammar_unit_no_non_terminals() {
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("5", "TERMINAL_LITERAL"),
+            get_token("<boolean>", "NON_TERMINAL"),
+            get_token("?", "QUESTION"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let grammar = Grammar::parse(tokens);
+
+        assert!(grammar.is_ok());
+
+        let grammar = grammar.unwrap();
+
+        let unit_non_terminals_map = grammar.get_unit_non_terminals();
+
+        assert!(unit_non_terminals_map.is_none());
     }
 }
