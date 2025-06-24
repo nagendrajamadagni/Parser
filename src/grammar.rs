@@ -317,7 +317,6 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
 
 pub fn optimize_grammar(grammar: &Grammar) {
     if let Some(unit_non_terminals) = grammar.get_unit_non_terminals() {
-        //     let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
         println!("The unit non terminals is {:?}", unit_non_terminals);
     } else {
         println!("The grammar does not contain any unit non terminals");
@@ -347,7 +346,7 @@ mod grammar_tests {
     use super::{check_completeness, grammar_tests_helper::get_token};
 
     #[test]
-    fn test_goal_complete_successful() {
+    fn test_goal_complete_reachability_successful() {
         let tokens: Vec<Token> = vec![
             get_token("<test>", "NON_TERMINAL"),
             get_token("::=", "DEFINES"),
@@ -423,6 +422,10 @@ mod grammar_tests {
         );
 
         assert!(result.is_ok());
+
+        let result = result.unwrap();
+
+        assert!(result.is_empty());
 
         let result = check_productivity(
             &term_to_non_terminal_map,
@@ -507,7 +510,84 @@ mod grammar_tests {
     }
 
     #[test]
-    fn test_reachability_unsuccessful() {}
+    fn test_reachability_unsuccessful() {
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\"a\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<nt2>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("B", "TERMINAL_CATEGORY"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let grammar = ebnf::parse_grammar(tokens);
+
+        assert!(grammar.is_ok());
+
+        let grammar = grammar.unwrap();
+
+        let mut term_to_non_terminal_map = HashMap::new();
+        let mut term_to_terminal_map = HashMap::new();
+
+        let defined_terms = check_completeness(
+            &grammar,
+            &mut term_to_non_terminal_map,
+            &mut term_to_terminal_map,
+        );
+
+        assert!(defined_terms.is_ok());
+
+        let defined_terms = defined_terms.unwrap();
+
+        let mut expected_result: HashSet<Term> = HashSet::new();
+
+        expected_result.insert(Term::NonTerminal("test".to_string()));
+        expected_result.insert(Term::NonTerminal("nt2".to_string()));
+
+        assert_eq!(defined_terms, expected_result);
+
+        let mut expected_term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        let mut expected_terminal_set = HashSet::new();
+
+        expected_terminal_set.insert(Term::TerminalLiteral("\"a\"".to_string()));
+
+        expected_term_to_terminal_map
+            .insert(Term::NonTerminal("test".to_string()), expected_terminal_set);
+
+        let mut expected_terminal_set = HashSet::new();
+
+        expected_terminal_set.insert(Term::TerminalCategory("B".to_string()));
+
+        expected_term_to_terminal_map
+            .insert(Term::NonTerminal("nt2".to_string()), expected_terminal_set);
+
+        assert_eq!(term_to_terminal_map, expected_term_to_terminal_map);
+
+        let result = check_reachability(
+            &term_to_non_terminal_map,
+            grammar.get_goal(),
+            &defined_terms,
+        );
+
+        assert!(result.is_ok());
+
+        let result = result.unwrap();
+
+        assert!(result.len() == 1);
+
+        assert!(*result.first().unwrap() == Term::NonTerminal("nt2".to_string()));
+
+        let result = check_productivity(
+            &term_to_non_terminal_map,
+            &term_to_terminal_map,
+            &defined_terms,
+        );
+
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn test_productivity_unsuccessful() {
