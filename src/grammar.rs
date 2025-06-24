@@ -363,13 +363,16 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
         &defined_terms,
     )?;
 
+    Ok(())
+}
+
+pub fn optimize_grammar(grammar: &Grammar) {
     let unit_non_terminals = get_unit_non_terminals(grammar);
 
+    let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
+
     println!("The unit non terminals is {:?}", unit_non_terminals);
-
-    //let transitive_closures = get_transitive_closures(&unit_non_terminals);
-
-    Ok(())
+    println!("The transitive closure map is {:?}", transitive_closure_map);
 }
 
 #[cfg(test)]
