@@ -49,7 +49,7 @@ pub struct Production {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grammar {
-    goal: Production,
+    goal: Term,
     productions: Vec<Production>,
 }
 
@@ -247,7 +247,7 @@ impl Production {
 }
 
 impl Grammar {
-    pub fn get_goal(&self) -> &Production {
+    pub fn get_goal(&self) -> &Term {
         &self.goal
     }
 
@@ -292,7 +292,7 @@ impl Grammar {
         }
 
         Ok(Grammar {
-            goal: productions[0].clone(),
+            goal: productions[0].get_left_term().clone(),
             productions,
         })
     }
@@ -671,10 +671,8 @@ mod ebnf_parser_tests {
         };
 
         let expected_grammar = Grammar {
-            goal: Production {
-                lhs: Term::NonTerminal("test".to_string()),
-                rhs: vec![expression_list],
-            },
+            goal: Term::NonTerminal("test".to_string()),
+
             productions: vec![expected_production],
         };
 
