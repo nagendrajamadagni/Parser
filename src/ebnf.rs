@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
@@ -240,13 +240,47 @@ impl Production {
         let expression = Self::parse_expression(tokens, expression_start, end)?;
 
         rhs.push(expression);
-        //let rhs: Vec<Expression> = rhs.into_iter().collect();
 
         Ok(Production { lhs, rhs })
+    }
+
+    // Return all unit non terminals associated with this production
+
+    fn get_unit_non_terminals(&self) -> Vec<Term> {
+        self.rhs
+            .iter()
+            .filter_map(|exp| {
+                if exp.len() == 1 && matches![exp.first().unwrap(), Term::NonTerminal(_)] {
+                    exp.first().cloned()
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
 impl Grammar {
+    // Return a map of terms and their unit productions
+    pub fn get_unit_non_terminals(&self) -> Option<HashMap<Term, Vec<Term>>> {
+        let mut unit_non_terminals_map = HashMap::new();
+
+        for production in self.productions.iter() {
+            let unit_non_terminals = production.get_unit_non_terminals();
+
+            if !unit_non_terminals.is_empty() {
+                unit_non_terminals_map
+                    .insert(production.get_left_term().clone(), unit_non_terminals);
+            }
+        }
+
+        if unit_non_terminals_map.is_empty() {
+            None
+        } else {
+            Some(unit_non_terminals_map)
+        }
+    }
+
     pub fn get_goal(&self) -> &Term {
         &self.goal
     }
