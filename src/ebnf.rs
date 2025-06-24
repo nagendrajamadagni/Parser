@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
@@ -42,24 +42,9 @@ impl fmt::Display for Term {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Expression {
-    sequence: Vec<Term>,
-    unit_non_terminal: bool,
-}
-
-impl fmt::Display for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for term in self.sequence.iter() {
-            write!(f, "{} ", term)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Production {
     lhs: Term,
-    rhs: Vec<Expression>,
+    rhs: Vec<Vec<Term>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +60,9 @@ impl fmt::Display for Grammar {
             write!(f, "{} ::= ", lhs)?;
             let expressions = production.get_expressions();
             for (idx, expression) in expressions.iter().enumerate() {
-                write!(f, "{} ", expression)?;
+                for term in expression {
+                    write!(f, "{} ", term)?;
+                }
                 if idx != expressions.len() - 1 {
                     write!(f, "| ")?;
                 }
@@ -121,16 +108,8 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-impl Expression {
-    pub fn get_terms(&self) -> &Vec<Term> {
-        &self.sequence
-    }
-
-    pub fn is_non_terminal_unit(&self) -> bool {
-        self.unit_non_terminal
-    }
-
-    fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
+impl Production {
+    fn parse_expression(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Vec<Term>> {
         let mut sequence: Vec<Term> = Vec::new();
 
         let mut idx = start;
@@ -173,9 +152,9 @@ impl Expression {
                         return Err(err);
                     }
 
-                    let inner_expression = Expression::parse(tokens, idx + 1, rparen_idx - 1)?;
+                    let inner_expression = Self::parse_expression(tokens, idx + 1, rparen_idx - 1)?;
                     idx = rparen_idx;
-                    Term::Group(inner_expression.sequence)
+                    Term::Group(inner_expression)
                 }
                 _ => {
                     let err = Report::new(ParseError::InvalidToken(
@@ -212,21 +191,10 @@ impl Expression {
             sequence.push(term);
         }
 
-        let is_unit_non_terminal = if sequence.len() == 1 {
-            matches!(sequence[0], Term::NonTerminal(_))
-        } else {
-            false
-        };
-
-        Ok(Expression {
-            sequence,
-            unit_non_terminal: is_unit_non_terminal,
-        })
+        Ok(sequence)
     }
-}
 
-impl Production {
-    pub fn get_expressions(&self) -> &Vec<Expression> {
+    pub fn get_expressions(&self) -> &Vec<Vec<Term>> {
         &self.rhs
     }
 
@@ -253,24 +221,26 @@ impl Production {
 
         let lhs = Term::NonTerminal(prod[1..prod.len() - 1].to_string());
 
-        let mut rhs: HashSet<Expression> = HashSet::new();
+        //let mut rhs: HashSet<Expression> = HashSet::new();
+        let mut rhs: Vec<Vec<Term>> = Vec::new();
 
         let mut expression_start = start + 2; // Skip the defines
 
         for pos in expression_start..end {
             if tokens[pos].get_category() == "ALTERNATION" {
-                let expression = Expression::parse(tokens, expression_start, pos - 1)?;
+                let expression: Vec<Term> =
+                    Self::parse_expression(tokens, expression_start, pos - 1)?;
                 // Parse everything until the alternation as a production rule
-                rhs.insert(expression);
+                rhs.push(expression);
                 expression_start = pos + 1; // Consume the alternation itself
             }
         }
 
         // Parse the last production rule before the termination
-        let expression = Expression::parse(tokens, expression_start, end)?;
+        let expression = Self::parse_expression(tokens, expression_start, end)?;
 
-        rhs.insert(expression);
-        let rhs: Vec<Expression> = rhs.into_iter().collect();
+        rhs.push(expression);
+        //let rhs: Vec<Expression> = rhs.into_iter().collect();
 
         Ok(Production { lhs, rhs })
     }
@@ -353,19 +323,15 @@ mod ebnf_parser_tests {
     };
     use lexviz::scanner::Token;
 
-    use super::Expression;
-
     #[test]
     fn test_expression_parse_terminal() {
         let tokens: Vec<Token> = vec![get_token("true", "TERMINAL_LITERAL")];
 
-        let expression = Expression::parse(&tokens, 0, 0);
+        let expression = Production::parse_expression(&tokens, 0, 0);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::TerminalLiteral("true".to_string())];
 
@@ -376,13 +342,11 @@ mod ebnf_parser_tests {
     fn test_expression_parse_terminal_category() {
         let tokens: Vec<Token> = vec![get_token("NUMBER", "TERMINAL_CATEGORY")];
 
-        let expression = Expression::parse(&tokens, 0, 0);
+        let expression = Production::parse_expression(&tokens, 0, 0);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::TerminalCategory("NUMBER".to_string())];
 
@@ -393,13 +357,11 @@ mod ebnf_parser_tests {
     fn test_expression_parse_non_terminal() {
         let tokens: Vec<Token> = vec![get_token("<boolean>", "NON_TERMINAL")];
 
-        let expression = Expression::parse(&tokens, 0, 0);
+        let expression = Production::parse_expression(&tokens, 0, 0);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::NonTerminal("boolean".to_string())];
 
@@ -413,13 +375,11 @@ mod ebnf_parser_tests {
             get_token("\\*", "ASTERISK"),
         ];
 
-        let expression = Expression::parse(&tokens, 0, 1);
+        let expression = Production::parse_expression(&tokens, 0, 1);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::Repetition(
             Box::new(Term::TerminalLiteral("true".to_string())),
@@ -436,13 +396,11 @@ mod ebnf_parser_tests {
             get_token("\\+", "PLUS"),
         ];
 
-        let expression = Expression::parse(&tokens, 0, 1);
+        let expression = Production::parse_expression(&tokens, 0, 1);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::Repetition(
             Box::new(Term::NonTerminal("boolean".to_string())),
@@ -465,13 +423,11 @@ mod ebnf_parser_tests {
             get_token(")", "RPAREN"),
         ];
 
-        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+        let expression = Production::parse_expression(&tokens, 0, tokens.len() - 1);
 
         assert!(expression.is_ok());
 
-        let expression = expression.unwrap();
-
-        let sequence = expression.sequence;
+        let sequence = expression.unwrap();
 
         let expected_list: Vec<Term> = vec![Term::Group(vec![
             Term::TerminalLiteral("5".to_string()),
@@ -497,7 +453,7 @@ mod ebnf_parser_tests {
             get_token(")", "RPAREN"),
         ];
 
-        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+        let expression = Production::parse_expression(&tokens, 0, tokens.len() - 1);
 
         assert!(expression.is_err());
 
@@ -522,7 +478,7 @@ mod ebnf_parser_tests {
             get_token(")", "RPAREN"),
         ];
 
-        let expression = Expression::parse(&tokens, 0, tokens.len() - 1);
+        let expression = Production::parse_expression(&tokens, 0, tokens.len() - 1);
 
         assert!(expression.is_err());
 
@@ -566,10 +522,7 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![Expression {
-                sequence: expression_list,
-                unit_non_terminal: false,
-            }],
+            rhs: vec![expression_list],
         };
 
         assert_eq!(expected_production, production);
@@ -609,16 +562,7 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![
-                Expression {
-                    sequence: expression_list,
-                    unit_non_terminal: false,
-                },
-                Expression {
-                    sequence: vec![Term::NonTerminal("6".to_string())],
-                    unit_non_terminal: true,
-                },
-            ],
+            rhs: vec![expression_list, vec![Term::NonTerminal("6".to_string())]],
         };
 
         let left_term = production.get_left_term();
@@ -723,19 +667,13 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![Expression {
-                sequence: expression_list.clone(),
-                unit_non_terminal: false,
-            }],
+            rhs: vec![expression_list.clone()],
         };
 
         let expected_grammar = Grammar {
             goal: Production {
                 lhs: Term::NonTerminal("test".to_string()),
-                rhs: vec![Expression {
-                    sequence: expression_list,
-                    unit_non_terminal: false,
-                }],
+                rhs: vec![expression_list],
             },
             productions: vec![expected_production],
         };
