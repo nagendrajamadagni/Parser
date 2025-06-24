@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::ebnf::Expression;
 pub use crate::ebnf::{Grammar, Production, Term};
 use eyre::{Report, Result};
 
@@ -62,12 +61,12 @@ fn get_rhs_non_terminals(
 
 // Get list of non terminals from an expression
 fn get_non_terminals_from_expression(
-    expression: &Expression,
+    expression: &Vec<Term>,
     term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
     lhs: &Term,
 ) {
-    for term in expression.get_terms() {
+    for term in expression {
         get_non_terminals_from_term(term, term_to_non_terminal_map, term_to_terminal_map, lhs);
     }
 }
@@ -125,7 +124,7 @@ fn check_non_terminal_productions(production: &Production) -> Result<()> {
     }
 
     // If the expression definition is an empty list, also return an error
-    if expressions.len() == 1 && expressions[0].get_terms().is_empty() {
+    if expressions.len() == 1 && expressions[0].is_empty() {
         let err = Report::new(GrammarError::IncompleteGrammar(term_name.to_string()));
         return Err(err);
     }
@@ -282,30 +281,30 @@ fn check_productivity(
     Ok(())
 }
 
-fn get_unit_non_terminals(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
-    let productions = grammar.get_productions();
-
-    let mut unit_productions: HashMap<Term, Vec<Term>> = HashMap::new();
-
-    for production in productions {
-        let left_term = production.get_left_term();
-        let terms = production
-            .get_expressions()
-            .iter()
-            .filter(|exp| exp.is_non_terminal_unit())
-            .filter_map(|exp| exp.get_terms().first())
-            .cloned()
-            .collect::<Vec<_>>();
-        if !terms.is_empty() {
-            unit_productions
-                .entry(left_term.clone())
-                .or_default()
-                .extend(terms);
-        }
-    }
-
-    unit_productions
-}
+// fn get_unit_non_terminals(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
+//     let productions = grammar.get_productions();
+//
+//     let mut unit_productions: HashMap<Term, Vec<Term>> = HashMap::new();
+//
+//     for production in productions {
+//         let left_term = production.get_left_term();
+//         let terms = production
+//             .get_expressions()
+//             .iter()
+//             .filter(|exp| exp.is_non_terminal_unit())
+//             .filter_map(|exp| exp.get_terms().first())
+//             .cloned()
+//             .collect::<Vec<_>>();
+//         if !terms.is_empty() {
+//             unit_productions
+//                 .entry(left_term.clone())
+//                 .or_default()
+//                 .extend(terms);
+//         }
+//     }
+//
+//     unit_productions
+// }
 
 fn get_transitive_closures(
     unit_productions_map: &HashMap<Term, Vec<Term>>,
@@ -345,7 +344,7 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
 
     let unused_terms = check_reachability(
         &term_to_non_terminal_map,
-        grammar.get_goal().get_left_term(),
+        grammar.get_goal(),
         &defined_terms,
     )?;
 
@@ -366,14 +365,14 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     Ok(())
 }
 
-pub fn optimize_grammar(grammar: &Grammar) {
-    let unit_non_terminals = get_unit_non_terminals(grammar);
-
-    let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
-
-    println!("The unit non terminals is {:?}", unit_non_terminals);
-    println!("The transitive closure map is {:?}", transitive_closure_map);
-}
+// pub fn optimize_grammar(grammar: &Grammar) {
+//     let unit_non_terminals = get_unit_non_terminals(grammar);
+//
+//     let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
+//
+//     println!("The unit non terminals is {:?}", unit_non_terminals);
+//     println!("The transitive closure map is {:?}", transitive_closure_map);
+// }
 
 #[cfg(test)]
 mod grammar_tests_helper {
@@ -469,7 +468,7 @@ mod grammar_tests {
 
         let result = check_reachability(
             &term_to_non_terminal_map,
-            grammar.get_goal().get_left_term(),
+            grammar.get_goal(),
             &defined_terms,
         );
 
