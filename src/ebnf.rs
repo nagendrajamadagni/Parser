@@ -599,20 +599,7 @@ mod ebnf_parser_tests {
             rhs: vec![expression_list, vec![Term::NonTerminal("6".to_string())]],
         };
 
-        let left_term = production.get_left_term();
-
-        let expected_left_term = expected_production.get_left_term();
-
-        assert_eq!(left_term, expected_left_term);
-
-        let expressions: HashSet<_> = production.get_expressions().iter().cloned().collect();
-        let expected_expressions: HashSet<_> = expected_production
-            .get_expressions()
-            .iter()
-            .cloned()
-            .collect();
-
-        assert_eq!(expressions, expected_expressions);
+        assert_eq!(production, expected_production);
     }
 
     #[test]
