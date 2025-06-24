@@ -281,56 +281,6 @@ fn check_productivity(
     Ok(())
 }
 
-// fn get_unit_non_terminals(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
-//     let productions = grammar.get_productions();
-//
-//     let mut unit_productions: HashMap<Term, Vec<Term>> = HashMap::new();
-//
-//     for production in productions {
-//         let left_term = production.get_left_term();
-//         let terms = production
-//             .get_expressions()
-//             .iter()
-//             .filter(|exp| exp.is_non_terminal_unit())
-//             .filter_map(|exp| exp.get_terms().first())
-//             .cloned()
-//             .collect::<Vec<_>>();
-//         if !terms.is_empty() {
-//             unit_productions
-//                 .entry(left_term.clone())
-//                 .or_default()
-//                 .extend(terms);
-//         }
-//     }
-//
-//     unit_productions
-// }
-
-fn get_transitive_closures(
-    unit_productions_map: &HashMap<Term, Vec<Term>>,
-) -> HashMap<Term, HashSet<Term>> {
-    //???
-    let mut transitive_closure_map: HashMap<Term, HashSet<Term>> = HashMap::new();
-
-    for production in unit_productions_map {
-        let mut stack: VecDeque<&Term> = VecDeque::new();
-        let key = production.0;
-        let values = production.1;
-
-        stack.extend(values);
-
-        while !stack.is_empty() {
-            let elem = stack.pop_front().unwrap();
-            transitive_closure_map
-                .entry(key.clone())
-                .or_default()
-                .insert(elem.clone());
-        }
-    }
-
-    transitive_closure_map
-}
-
 pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     // Mapping of the non-terminals found in each term
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
@@ -365,14 +315,14 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     Ok(())
 }
 
-// pub fn optimize_grammar(grammar: &Grammar) {
-//     let unit_non_terminals = get_unit_non_terminals(grammar);
-//
-//     let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
-//
-//     println!("The unit non terminals is {:?}", unit_non_terminals);
-//     println!("The transitive closure map is {:?}", transitive_closure_map);
-// }
+pub fn optimize_grammar(grammar: &Grammar) {
+    if let Some(unit_non_terminals) = grammar.get_unit_non_terminals() {
+        //     let transitive_closure_map = get_transitive_closures(&unit_non_terminals);
+        println!("The unit non terminals is {:?}", unit_non_terminals);
+    } else {
+        println!("The grammar does not contain any unit non terminals");
+    }
+}
 
 #[cfg(test)]
 mod grammar_tests_helper {
