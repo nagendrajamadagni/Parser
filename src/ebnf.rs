@@ -191,6 +191,11 @@ impl Production {
             sequence.push(term);
         }
 
+        if sequence.is_empty() {
+            let err = Report::new(ParseError::IncompleteProduction);
+            return Err(err);
+        }
+
         Ok(sequence)
     }
 
@@ -330,7 +335,6 @@ mod ebnf_parser_test_helpers {
 
 #[cfg(test)]
 mod ebnf_parser_tests {
-    use std::collections::HashMap;
 
     use crate::ebnf::{
         Grammar, ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
@@ -753,5 +757,30 @@ mod ebnf_parser_tests {
         let unit_non_terminals = production.get_unit_non_terminals();
 
         assert!(unit_non_terminals.is_empty());
+    }
+
+    #[test]
+    fn test_production_missing_definition() {
+        let tokens: Vec<Token> = vec![
+            get_token("<test>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\"a\"", "TERMINAL_LITERAL"),
+            get_token("<nt2>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<nt2>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let grammar = Grammar::parse(tokens);
+
+        assert!(grammar.is_err(), "{:?}", grammar);
+
+        let result = grammar.unwrap_err();
+
+        match result.downcast().unwrap() {
+            ParseError::IncompleteProduction => {}
+            _ => unreachable!(),
+        }
     }
 }
