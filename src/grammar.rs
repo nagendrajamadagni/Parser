@@ -315,8 +315,54 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     Ok(())
 }
 
+fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
+    let mut transitive_closures: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+    let mut queue: VecDeque<Term> = VecDeque::new();
+
+    // Create a trivial map where each term derives itself
+    // Get the transitive closure with BFS using the set value as a visited set
+
+    for production in grammar.get_productions() {
+        let left_non_terminal = production.get_left_term();
+        let mut value_set: HashSet<Term> = HashSet::from([left_non_terminal.clone()]);
+        queue.push_back(left_non_terminal.clone()); // Insert the element into the queue
+
+        // Start BFS
+
+        while !queue.is_empty() {
+            let front = queue.pop_front().unwrap(); // Get element at front of queue
+            let prod = grammar // Get productions of front of queue
+                .get_productions()
+                .iter()
+                .find(|p| p.get_left_term().clone() == front)
+                .unwrap();
+            let unit_non_terminals = prod.get_unit_non_terminals(); // Get unit non terminals of
+            // the above production
+
+            // If these unit non terminals are not already in the value set add them, also add to
+            // the queue.
+
+            unit_non_terminals.iter().for_each(|nt| {
+                if !value_set.contains(nt) {
+                    queue.push_back(nt.clone());
+                    value_set.insert(nt.clone());
+                }
+            });
+        }
+
+        transitive_closures.insert(left_non_terminal.clone(), value_set);
+    }
+
+    transitive_closures
+}
+
 pub fn optimize_grammar(grammar: &Grammar) {
-    println!("The grammar does not contain any unit non terminals");
+    let transitive_closure_set = get_transitive_closures(grammar);
+    println!(
+        "The transitive closure generated is {:?}",
+        transitive_closure_set
+    );
 }
 
 #[cfg(test)]
