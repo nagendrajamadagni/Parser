@@ -382,7 +382,7 @@ mod grammar_tests {
 
     use crate::{
         ebnf::{self, Term},
-        grammar::{GrammarError, check_productivity, check_reachability},
+        grammar::{GrammarError, check_productivity, check_reachability, get_transitive_closures},
     };
 
     use super::{check_completeness, grammar_tests_helper::get_token};
@@ -687,5 +687,88 @@ mod grammar_tests {
             GrammarError::NonProductive(_) => {}
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_transitive_closure() {
+        let tokens: Vec<Token> = vec![
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"a\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"b\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"c\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"a\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let grammar = ebnf::parse_grammar(tokens);
+
+        assert!(grammar.is_ok());
+
+        let grammar = grammar.unwrap();
+
+        let transitive_closure_map = get_transitive_closures(&grammar);
+
+        let expected_map = HashMap::from([
+            (
+                Term::NonTerminal("S".to_string()),
+                HashSet::from([
+                    Term::NonTerminal("S".to_string()),
+                    Term::NonTerminal("A".to_string()),
+                    Term::NonTerminal("B".to_string()),
+                    Term::NonTerminal("C".to_string()),
+                ]),
+            ),
+            (
+                Term::NonTerminal("A".to_string()),
+                HashSet::from([
+                    Term::NonTerminal("S".to_string()),
+                    Term::NonTerminal("A".to_string()),
+                    Term::NonTerminal("B".to_string()),
+                    Term::NonTerminal("C".to_string()),
+                ]),
+            ),
+            (
+                Term::NonTerminal("B".to_string()),
+                HashSet::from([
+                    Term::NonTerminal("S".to_string()),
+                    Term::NonTerminal("A".to_string()),
+                    Term::NonTerminal("B".to_string()),
+                    Term::NonTerminal("C".to_string()),
+                ]),
+            ),
+            (
+                Term::NonTerminal("C".to_string()),
+                HashSet::from([
+                    Term::NonTerminal("S".to_string()),
+                    Term::NonTerminal("A".to_string()),
+                    Term::NonTerminal("B".to_string()),
+                    Term::NonTerminal("C".to_string()),
+                ]),
+            ),
+        ]);
+
+        assert_eq!(
+            transitive_closure_map, expected_map,
+            "Expected {:?} but got {:?}",
+            expected_map, transitive_closure_map
+        );
     }
 }
