@@ -263,6 +263,24 @@ impl Production {
             })
             .collect()
     }
+
+    pub fn remove_production(&mut self, key: Term) {
+        self.rhs.retain(|exp| exp.len() != 1 || exp[0] != key);
+    }
+
+    pub fn get_non_unit_productions(&self) -> Vec<Vec<Term>> {
+        self.rhs
+            .iter()
+            .filter(|exp| exp.len() != 1 || !matches![exp[0], Term::NonTerminal(_)])
+            .cloned()
+            .collect()
+    }
+
+    pub fn add_production(&mut self, productions: Vec<Vec<Term>>) {
+        for production in productions {
+            self.rhs.push(production);
+        }
+    }
 }
 
 impl Grammar {
@@ -270,11 +288,21 @@ impl Grammar {
         &self.goal
     }
 
+    pub fn find_production_mut(&mut self, key: &Term) -> Option<&mut Production> {
+        self.productions
+            .iter_mut()
+            .find(|p| p.get_left_term() == key)
+    }
+
+    pub fn find_production(&self, key: &Term) -> Option<&Production> {
+        self.productions.iter().find(|p| p.get_left_term() == key)
+    }
+
     pub fn get_productions(&self) -> &Vec<Production> {
         &self.productions
     }
 
-    pub fn remove_production(&mut self, removal_list: &Vec<Term>) {
+    pub fn remove_definition(&mut self, removal_list: &Vec<Term>) {
         for prod in removal_list {
             if let Some(pos) = self
                 .productions
