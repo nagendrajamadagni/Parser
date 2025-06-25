@@ -286,13 +286,17 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
         &mut term_to_terminal_map,
     )?;
 
+    let transitive_closures = get_transitive_closures(grammar);
+
+    remove_unit_productions(grammar, transitive_closures);
+
     let unused_terms = check_reachability(
         &term_to_non_terminal_map,
         grammar.get_goal(),
         &defined_terms,
     )?;
 
-    grammar.remove_production(&unused_terms);
+    grammar.remove_definition(&unused_terms);
 
     for term in unused_terms {
         term_to_non_terminal_map.remove(&term);
@@ -307,6 +311,39 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
     )?;
 
     Ok(())
+}
+
+fn remove_unit_productions(
+    grammar: &mut Grammar,
+    transitive_closure_map: HashMap<Term, HashSet<Term>>,
+) {
+    // For each pair in the transitive closure, add the non unit productions, remove the unit
+    // productions
+
+    for (key, closure_set) in transitive_closure_map {
+        for nt in closure_set {
+            if nt == key {
+                continue;
+            }
+            let mut non_unit_productions: Vec<Vec<Term>> = Vec::new();
+            if let Some(nt_production) = grammar.find_production(&nt) {
+                // Get the non unit productions of nt
+                non_unit_productions = nt_production.get_non_unit_productions();
+            }
+
+            if let Some(key_production) = grammar.find_production_mut(&key) {
+                // Add the non unit productions of nt into key
+                key_production.add_production(non_unit_productions);
+                // Remove unit production nt from key
+                key_production.remove_production(nt);
+                println!(
+                    "The production after the transformation is {:?}",
+                    key_production
+                );
+            }
+        }
+        println!();
+    }
 }
 
 fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
@@ -349,14 +386,6 @@ fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
     }
 
     transitive_closures
-}
-
-pub fn optimize_grammar(grammar: &Grammar) {
-    let transitive_closure_set = get_transitive_closures(grammar);
-    println!(
-        "The transitive closure generated is {:?}",
-        transitive_closure_set
-    );
 }
 
 #[cfg(test)]
