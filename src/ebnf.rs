@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
