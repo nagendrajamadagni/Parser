@@ -50,7 +50,7 @@ fn get_rhs_non_terminals(
 
     let non_terminals_list: Vec<Term> = term_to_non_terminal_map
         .values()
-        .flat_map(|set| set.iter())
+        .flat_map(|exp| exp.iter())
         .cloned()
         .collect();
 
