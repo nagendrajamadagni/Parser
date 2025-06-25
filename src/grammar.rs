@@ -316,11 +316,7 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
 }
 
 pub fn optimize_grammar(grammar: &Grammar) {
-    if let Some(unit_non_terminals) = grammar.get_unit_non_terminals() {
-        println!("The unit non terminals is {:?}", unit_non_terminals);
-    } else {
-        println!("The grammar does not contain any unit non terminals");
-    }
+    println!("The grammar does not contain any unit non terminals");
 }
 
 #[cfg(test)]

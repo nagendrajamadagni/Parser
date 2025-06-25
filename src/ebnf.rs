@@ -261,26 +261,6 @@ impl Production {
 }
 
 impl Grammar {
-    // Return a map of terms and their unit productions
-    pub fn get_unit_non_terminals(&self) -> Option<HashMap<Term, Vec<Term>>> {
-        let mut unit_non_terminals_map = HashMap::new();
-
-        for production in self.productions.iter() {
-            let unit_non_terminals = production.get_unit_non_terminals();
-
-            if !unit_non_terminals.is_empty() {
-                unit_non_terminals_map
-                    .insert(production.get_left_term().clone(), unit_non_terminals);
-            }
-        }
-
-        if unit_non_terminals_map.is_empty() {
-            None
-        } else {
-            Some(unit_non_terminals_map)
-        }
-    }
-
     pub fn get_goal(&self) -> &Term {
         &self.goal
     }
@@ -773,62 +753,5 @@ mod ebnf_parser_tests {
         let unit_non_terminals = production.get_unit_non_terminals();
 
         assert!(unit_non_terminals.is_empty());
-    }
-
-    #[test]
-    fn test_grammar_unit_non_terminals() {
-        let tokens: Vec<Token> = vec![
-            get_token("<A>", "NON_TERMINAL"),
-            get_token("::=", "DEFINES"),
-            get_token("<B>", "NON_TERMINAL"),
-            get_token("5", "TERMINAL_LITERAL"),
-            get_token("<boolean>", "NON_TERMINAL"),
-            get_token("?", "QUESTION"),
-            get_token("\\|", "ALTERNATION"),
-            get_token("<C>", "NON_TERMINAL"),
-            get_token(";", "TERMINATION"),
-        ];
-
-        let grammar = Grammar::parse(tokens);
-
-        assert!(grammar.is_ok());
-
-        let grammar = grammar.unwrap();
-
-        let unit_non_terminals = grammar.get_unit_non_terminals();
-
-        assert!(unit_non_terminals.is_some());
-
-        let unit_non_terminals = unit_non_terminals.unwrap();
-
-        let expected_map = HashMap::from([(
-            Term::NonTerminal("A".to_string()),
-            vec![Term::NonTerminal("C".to_string())],
-        )]);
-
-        assert_eq!(unit_non_terminals, expected_map);
-    }
-
-    #[test]
-    fn test_grammar_unit_no_non_terminals() {
-        let tokens: Vec<Token> = vec![
-            get_token("<A>", "NON_TERMINAL"),
-            get_token("::=", "DEFINES"),
-            get_token("<B>", "NON_TERMINAL"),
-            get_token("5", "TERMINAL_LITERAL"),
-            get_token("<boolean>", "NON_TERMINAL"),
-            get_token("?", "QUESTION"),
-            get_token(";", "TERMINATION"),
-        ];
-
-        let grammar = Grammar::parse(tokens);
-
-        assert!(grammar.is_ok());
-
-        let grammar = grammar.unwrap();
-
-        let unit_non_terminals_map = grammar.get_unit_non_terminals();
-
-        assert!(unit_non_terminals_map.is_none());
     }
 }
