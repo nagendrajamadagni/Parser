@@ -1,4 +1,4 @@
-use grammar::{check_correctness, optimize_grammar};
+use grammar::check_correctness;
 use lexviz::{
     construct_dfa, construct_minimal_dfa, construct_nfa, construct_scanner, parse_microsyntax_list,
 };
@@ -59,6 +59,5 @@ fn main() -> Result<()> {
 
     check_correctness(&mut grammar)?;
 
-    optimize_grammar(&grammar);
     Ok(())
 }
