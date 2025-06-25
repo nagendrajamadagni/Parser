@@ -118,13 +118,7 @@ fn check_non_terminal_productions(production: &Production) -> Result<()> {
     };
 
     if expressions.is_empty() {
-        // If there are not expressions return incomplete grammar
-        let err = Report::new(GrammarError::IncompleteGrammar(term_name.to_string()));
-        return Err(err);
-    }
-
-    // If the expression definition is an empty list, also return an error
-    if expressions.len() == 1 && expressions[0].is_empty() {
+        // If there are no expressions return incomplete grammar
         let err = Report::new(GrammarError::IncompleteGrammar(term_name.to_string()));
         return Err(err);
     }
@@ -509,44 +503,6 @@ mod grammar_tests {
 
         match result.downcast().unwrap() {
             GrammarError::ProductionNotDefined(_) => {}
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    fn test_complete_unsuccessful2() {
-        let tokens: Vec<Token> = vec![
-            get_token("<test>", "NON_TERMINAL"),
-            get_token("::=", "DEFINES"),
-            get_token("\"a\"", "TERMINAL_LITERAL"),
-            get_token("<nt2>", "NON_TERMINAL"),
-            get_token(";", "TERMINATION"),
-            get_token("<nt2>", "NON_TERMINAL"),
-            get_token("::=", "DEFINES"),
-            get_token(";", "TERMINATION"),
-        ];
-
-        let grammar = ebnf::parse_grammar(tokens);
-
-        assert!(grammar.is_ok(), "{:?}", grammar);
-
-        let grammar = grammar.unwrap();
-
-        let mut term_to_non_terminal_map = HashMap::new();
-        let mut term_to_terminal_map = HashMap::new();
-
-        let result = check_completeness(
-            &grammar,
-            &mut term_to_non_terminal_map,
-            &mut term_to_terminal_map,
-        );
-
-        assert!(result.is_err());
-
-        let result = result.unwrap_err();
-
-        match result.downcast().unwrap() {
-            GrammarError::IncompleteGrammar(_) => {}
             _ => unreachable!(),
         }
     }
