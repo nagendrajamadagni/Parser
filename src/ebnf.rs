@@ -246,7 +246,7 @@ impl Production {
 
     // Return all unit non terminals associated with this production
 
-    fn get_unit_non_terminals(&self) -> Vec<Term> {
+    pub fn get_unit_non_terminals(&self) -> Vec<Term> {
         self.rhs
             .iter()
             .filter_map(|exp| {
