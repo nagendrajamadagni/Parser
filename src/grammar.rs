@@ -200,9 +200,6 @@ fn check_reachability(
 
     let non_reachable: Vec<Term> = defined_terms.difference(&visited).cloned().collect();
 
-    if !non_reachable.is_empty() {
-        println!("Found some dead code {:?}", non_reachable);
-    }
     Ok(non_reachable)
 }
 
@@ -290,6 +287,15 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
 
     remove_unit_productions(grammar, transitive_closures);
 
+    let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+    let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+    get_rhs_non_terminals(
+        grammar,
+        &mut term_to_non_terminal_map,
+        &mut term_to_terminal_map,
+    );
+
     let unused_terms = check_reachability(
         &term_to_non_terminal_map,
         grammar.get_goal(),
@@ -309,6 +315,8 @@ pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
         &term_to_terminal_map,
         &defined_terms,
     )?;
+
+    println!("The transformed grammar is\n{}", grammar);
 
     Ok(())
 }
@@ -336,13 +344,8 @@ fn remove_unit_productions(
                 key_production.add_production(non_unit_productions);
                 // Remove unit production nt from key
                 key_production.remove_production(nt);
-                println!(
-                    "The production after the transformation is {:?}",
-                    key_production
-                );
             }
         }
-        println!();
     }
 }
 
