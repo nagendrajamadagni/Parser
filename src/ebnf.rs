@@ -1,7 +1,6 @@
-use std::fmt;
-
 use color_eyre::{Report, Result};
 use lexviz::scanner::Token;
+use std::{collections::HashSet, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RepetitionType {
@@ -41,10 +40,12 @@ impl fmt::Display for Term {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Production {
     lhs: Term,
     rhs: Vec<Vec<Term>>,
+    terminal_set: HashSet<Term>,
+    non_terminal_set: HashSet<Term>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,6 +209,9 @@ impl Production {
     }
 
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
+        let mut terminal_set = HashSet::new();
+        let mut non_terminal_set = HashSet::new();
+
         if tokens[start].get_category() != "NON_TERMINAL" {
             let err = Report::new(ParseError::InvalidProductionLHS(
                 tokens[start].get_token().to_string(),
@@ -236,6 +240,8 @@ impl Production {
                 let expression: Vec<Term> =
                     Self::parse_expression(tokens, expression_start, pos - 1)?;
                 // Parse everything until the alternation as a production rule
+                terminal_set.extend(Self::get_terminal_terms(&expression));
+                non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
                 rhs.push(expression);
                 expression_start = pos + 1; // Consume the alternation itself
             }
@@ -244,9 +250,69 @@ impl Production {
         // Parse the last production rule before the termination
         let expression = Self::parse_expression(tokens, expression_start, end)?;
 
+        terminal_set.extend(Self::get_terminal_terms(&expression));
+        non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
+
         rhs.push(expression);
 
-        Ok(Production { lhs, rhs })
+        Ok(Production {
+            lhs,
+            rhs,
+            terminal_set,
+            non_terminal_set,
+        })
+    }
+
+    fn get_terminal_terms(expression: &Vec<Term>) -> HashSet<Term> {
+        let mut terminal_set = HashSet::new();
+
+        for term in expression {
+            match term {
+                Term::TerminalLiteral(_) => {
+                    terminal_set.insert(term.clone());
+                }
+                Term::TerminalCategory(_) => {
+                    terminal_set.insert(term.clone());
+                }
+                Term::NonTerminal(_) => {}
+                Term::Group(group) => {
+                    let group_terminals = Self::get_terminal_terms(group);
+                    terminal_set.extend(group_terminals);
+                }
+                Term::Repetition(boxed_term, _) => {
+                    let boxed_term = boxed_term.clone();
+                    let repetition_terminals = Self::get_terminal_terms(&vec![*boxed_term]);
+                    terminal_set.extend(repetition_terminals);
+                }
+            };
+        }
+
+        terminal_set
+    }
+
+    fn get_non_terminal_terms(expression: &Vec<Term>) -> HashSet<Term> {
+        let mut non_terminal_set = HashSet::new();
+
+        for term in expression {
+            match term {
+                Term::TerminalLiteral(_) => {}
+                Term::TerminalCategory(_) => {}
+                Term::NonTerminal(_) => {
+                    non_terminal_set.insert(term.clone());
+                }
+                Term::Group(group) => {
+                    let group_terminals = Self::get_non_terminal_terms(group);
+                    non_terminal_set.extend(group_terminals);
+                }
+                Term::Repetition(boxed_term, _) => {
+                    let boxed_term = boxed_term.clone();
+                    let repetition_terminals = Self::get_non_terminal_terms(&vec![*boxed_term]);
+                    non_terminal_set.extend(repetition_terminals);
+                }
+            };
+        }
+
+        non_terminal_set
     }
 
     // Return all unit non terminals associated with this production
@@ -368,6 +434,7 @@ mod ebnf_parser_tests {
         Grammar, ParseError, Production, RepetitionType, Term, ebnf_parser_test_helpers::get_token,
     };
     use lexviz::scanner::Token;
+    use std::collections::HashSet;
 
     #[test]
     fn test_expression_parse_terminal() {
@@ -569,6 +636,11 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list],
+            terminal_set: HashSet::from([
+                Term::TerminalLiteral("5".to_string()),
+                Term::TerminalLiteral("+".to_string()),
+            ]),
+            non_terminal_set: HashSet::from([Term::NonTerminal("boolean".to_string())]),
         };
 
         assert_eq!(expected_production, production);
@@ -609,6 +681,14 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list, vec![Term::NonTerminal("6".to_string())]],
+            terminal_set: HashSet::from([
+                Term::TerminalLiteral("5".to_string()),
+                Term::TerminalLiteral("+".to_string()),
+            ]),
+            non_terminal_set: HashSet::from([
+                Term::NonTerminal("boolean".to_string()),
+                Term::NonTerminal("6".to_string()),
+            ]),
         };
 
         assert_eq!(production, expected_production);
@@ -701,6 +781,11 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list.clone()],
+            terminal_set: HashSet::from([
+                Term::TerminalLiteral("5".to_string()),
+                Term::TerminalLiteral("+".to_string()),
+            ]),
+            non_terminal_set: HashSet::from([Term::NonTerminal("boolean".to_string())]),
         };
 
         let expected_grammar = Grammar {
@@ -810,5 +895,77 @@ mod ebnf_parser_tests {
             ParseError::IncompleteProduction => {}
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_get_terminal_terms() {
+        let terms: Vec<Term> = vec![
+            Term::TerminalLiteral("term1".to_string()),
+            Term::TerminalCategory("term2".to_string()),
+            Term::Group(vec![
+                Term::TerminalLiteral("term3".to_string()),
+                Term::NonTerminal("nonterm1".to_string()),
+            ]),
+            Term::NonTerminal("nonterm2".to_string()),
+            Term::Repetition(
+                Box::new(Term::TerminalLiteral("term4".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+            Term::Repetition(
+                Box::new(Term::TerminalCategory("term5".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+            Term::Repetition(
+                Box::new(Term::NonTerminal("nonterm3".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+        ];
+
+        let terminal_set = Production::get_terminal_terms(&terms);
+
+        let expected_set = HashSet::from([
+            Term::TerminalLiteral("term1".to_string()),
+            Term::TerminalCategory("term2".to_string()),
+            Term::TerminalLiteral("term3".to_string()),
+            Term::TerminalLiteral("term4".to_string()),
+            Term::TerminalCategory("term5".to_string()),
+        ]);
+
+        assert_eq!(terminal_set, expected_set);
+    }
+
+    #[test]
+    fn test_get_non_terminal_terms() {
+        let terms: Vec<Term> = vec![
+            Term::TerminalLiteral("term1".to_string()),
+            Term::TerminalCategory("term2".to_string()),
+            Term::Group(vec![
+                Term::TerminalLiteral("term3".to_string()),
+                Term::NonTerminal("nonterm1".to_string()),
+            ]),
+            Term::NonTerminal("nonterm2".to_string()),
+            Term::Repetition(
+                Box::new(Term::TerminalLiteral("term4".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+            Term::Repetition(
+                Box::new(Term::TerminalCategory("term5".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+            Term::Repetition(
+                Box::new(Term::NonTerminal("nonterm3".to_string())),
+                RepetitionType::OneOrMore,
+            ),
+        ];
+
+        let non_terminal_set = Production::get_non_terminal_terms(&terms);
+
+        let expected_set = HashSet::from([
+            Term::NonTerminal("nonterm1".to_string()),
+            Term::NonTerminal("nonterm2".to_string()),
+            Term::NonTerminal("nonterm3".to_string()),
+        ]);
+
+        assert_eq!(non_terminal_set, expected_set);
     }
 }
