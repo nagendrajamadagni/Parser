@@ -209,8 +209,8 @@ impl Production {
     }
 
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
-        let mut terminal_set = HashSet::new();
-        let mut non_terminal_set = HashSet::new();
+        let terminal_set = HashSet::new();
+        let non_terminal_set = HashSet::new();
 
         if tokens[start].get_category() != "NON_TERMINAL" {
             let err = Report::new(ParseError::InvalidProductionLHS(
@@ -240,8 +240,8 @@ impl Production {
                 let expression: Vec<Term> =
                     Self::parse_expression(tokens, expression_start, pos - 1)?;
                 // Parse everything until the alternation as a production rule
-                terminal_set.extend(Self::get_terminal_terms(&expression));
-                non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
+                //terminal_set.extend(Self::get_terminal_terms(&expression));
+                //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
                 rhs.push(expression);
                 expression_start = pos + 1; // Consume the alternation itself
             }
@@ -250,8 +250,8 @@ impl Production {
         // Parse the last production rule before the termination
         let expression = Self::parse_expression(tokens, expression_start, end)?;
 
-        terminal_set.extend(Self::get_terminal_terms(&expression));
-        non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
+        //terminal_set.extend(Self::get_terminal_terms(&expression));
+        //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
 
         rhs.push(expression);
 
@@ -347,9 +347,36 @@ impl Production {
             self.rhs.push(production);
         }
     }
+
+    pub fn get_terminal_set(&self) -> &HashSet<Term> {
+        &self.terminal_set
+    }
+
+    pub fn get_non_terminal_set(&self) -> &HashSet<Term> {
+        &self.non_terminal_set
+    }
 }
 
 impl Grammar {
+    pub fn get_terminal_terms(&mut self) {
+        for production in self.productions.iter_mut() {
+            production.terminal_set = HashSet::new();
+            for expression in &production.rhs {
+                let terminal_terms = Production::get_terminal_terms(expression);
+                production.terminal_set.extend(terminal_terms);
+            }
+        }
+    }
+
+    pub fn get_non_terminal_terms(&mut self) {
+        for production in self.productions.iter_mut() {
+            production.non_terminal_set = HashSet::new();
+            for expression in &production.rhs {
+                let non_terminal_terms = Production::get_non_terminal_terms(expression);
+                production.non_terminal_set.extend(non_terminal_terms);
+            }
+        }
+    }
     pub fn get_goal(&self) -> &Term {
         &self.goal
     }
@@ -636,11 +663,8 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list],
-            terminal_set: HashSet::from([
-                Term::TerminalLiteral("5".to_string()),
-                Term::TerminalLiteral("+".to_string()),
-            ]),
-            non_terminal_set: HashSet::from([Term::NonTerminal("boolean".to_string())]),
+            terminal_set: HashSet::new(),
+            non_terminal_set: HashSet::new(),
         };
 
         assert_eq!(expected_production, production);
@@ -681,14 +705,8 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list, vec![Term::NonTerminal("6".to_string())]],
-            terminal_set: HashSet::from([
-                Term::TerminalLiteral("5".to_string()),
-                Term::TerminalLiteral("+".to_string()),
-            ]),
-            non_terminal_set: HashSet::from([
-                Term::NonTerminal("boolean".to_string()),
-                Term::NonTerminal("6".to_string()),
-            ]),
+            terminal_set: HashSet::new(),
+            non_terminal_set: HashSet::new(),
         };
 
         assert_eq!(production, expected_production);
@@ -781,11 +799,8 @@ mod ebnf_parser_tests {
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
             rhs: vec![expression_list.clone()],
-            terminal_set: HashSet::from([
-                Term::TerminalLiteral("5".to_string()),
-                Term::TerminalLiteral("+".to_string()),
-            ]),
-            non_terminal_set: HashSet::from([Term::NonTerminal("boolean".to_string())]),
+            terminal_set: HashSet::new(),
+            non_terminal_set: HashSet::new(),
         };
 
         let expected_grammar = Grammar {
