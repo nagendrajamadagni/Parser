@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-pub use crate::ebnf::{Grammar, Production, Term};
+pub use crate::ebnf::{Grammar, Term};
 use eyre::{Report, Result};
 
 #[derive(Debug)]
 pub enum GrammarError {
-    IncompleteGrammar(String),
     ProductionNotDefined(Vec<Term>),
     NonProductive(Vec<Term>),
 }
@@ -13,10 +12,6 @@ pub enum GrammarError {
 impl std::fmt::Display for GrammarError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IncompleteGrammar(production) => write!(
-                f,
-                "Error: Incomplete grammar found, cannot find any expressions for the production {production}"
-            ),
             Self::ProductionNotDefined(term) => {
                 write!(f, "Error: Undefined terms {:?} encountered", term)
             }
@@ -29,137 +24,20 @@ impl std::fmt::Display for GrammarError {
 
 impl std::error::Error for GrammarError {}
 
-// Get list of non terminals in rhs of a grammar
-fn get_rhs_non_terminals(
-    grammar: &Grammar,
-    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-) -> HashSet<Term> {
-    let mut non_terminals: HashSet<Term> = HashSet::new();
-    for production in grammar.get_productions() {
-        let lhs = production.get_left_term();
-        for expression in production.get_expressions() {
-            get_non_terminals_from_expression(
-                expression,
-                term_to_non_terminal_map,
-                term_to_terminal_map,
-                lhs,
-            );
-        }
-    }
-
-    let non_terminals_list: Vec<Term> = term_to_non_terminal_map
-        .values()
-        .flat_map(|exp| exp.iter())
-        .cloned()
-        .collect();
-
-    non_terminals.extend(non_terminals_list);
-
-    non_terminals
-}
-
-// Get list of non terminals from an expression
-fn get_non_terminals_from_expression(
-    expression: &Vec<Term>,
-    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    lhs: &Term,
-) {
-    for term in expression {
-        get_non_terminals_from_term(term, term_to_non_terminal_map, term_to_terminal_map, lhs);
-    }
-}
-
-// Get list of non terminals from a term
-fn get_non_terminals_from_term(
-    term: &Term,
-    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    lhs: &Term,
-) {
-    match term {
-        Term::NonTerminal(_) => {
-            term_to_non_terminal_map
-                .entry(lhs.clone())
-                .or_default()
-                .insert(term.clone());
-        }
-        Term::Group(terms) => {
-            for inner_term in terms.iter() {
-                get_non_terminals_from_term(
-                    inner_term,
-                    term_to_non_terminal_map,
-                    term_to_terminal_map,
-                    lhs,
-                );
-            }
-        }
-        Term::Repetition(term, _) => {
-            get_non_terminals_from_term(term, term_to_non_terminal_map, term_to_terminal_map, lhs);
-        }
-        Term::TerminalLiteral(_) | Term::TerminalCategory(_) => {
-            term_to_terminal_map
-                .entry(lhs.clone())
-                .or_default()
-                .insert(term.clone());
-        }
-    }
-}
-
-// Check if a non-terminal term has atleast one production rule
-fn check_non_terminal_productions(production: &Production) -> Result<()> {
-    let expressions = production.get_expressions();
-    let term = production.get_left_term();
-
-    let term_name = match term {
-        Term::NonTerminal(term_name) => term_name,
-        _ => panic!("Expected a non-terminal term"),
-    };
-
-    if expressions.is_empty() {
-        // If there are no expressions return incomplete grammar
-        let err = Report::new(GrammarError::IncompleteGrammar(term_name.to_string()));
-        return Err(err);
-    }
-
-    Ok(())
-}
-
-// Check if all left hand non-terminal terms have atleast one production term
-fn check_lhs_non_terminals(grammar: &Grammar) -> Result<HashSet<Term>> {
-    let mut complete_left_productions = HashSet::new();
-
-    // Get list of left terms which are non-terminal productions
-
-    let non_terminal_productions = grammar
-        .get_productions()
-        .iter()
-        .filter(|production| matches![production.get_left_term(), Term::NonTerminal(_),]);
-
-    // Check if every left non_terminal has atleast one production rule
-
-    for production in non_terminal_productions {
-        match check_non_terminal_productions(production) {
-            Ok(()) => complete_left_productions.insert(production.get_left_term().clone()),
-            Err(err) => return Err(err),
-        };
-    }
-
-    Ok(complete_left_productions)
-}
-
 // Check if all non terminals used in the RHS are defined, return list of all defined terms or
 // error.
-fn check_completeness(
-    grammar: &Grammar,
-    term_to_non_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-    term_to_terminal_map: &mut HashMap<Term, HashSet<Term>>,
-) -> Result<HashSet<Term>> {
-    let used_rhs_non_terminals =
-        get_rhs_non_terminals(grammar, term_to_non_terminal_map, term_to_terminal_map);
+fn check_completeness(grammar: &Grammar) -> Result<HashSet<Term>> {
+    let mut used_rhs_non_terminals: HashSet<Term> = HashSet::new();
 
-    let defined_lhs_non_terminals = check_lhs_non_terminals(grammar)?;
+    for production in grammar.get_productions() {
+        used_rhs_non_terminals.extend(production.get_non_terminal_set().clone());
+    }
+
+    let defined_lhs_non_terminals = grammar
+        .get_productions()
+        .iter()
+        .map(|production| production.get_left_term().clone())
+        .collect();
 
     if used_rhs_non_terminals.is_subset(&defined_lhs_non_terminals) {
         Ok(defined_lhs_non_terminals)
@@ -176,9 +54,9 @@ fn check_completeness(
 // Check for any dead code
 
 fn check_reachability(
-    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
     goal: &Term,
     defined_terms: &HashSet<Term>,
+    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
 ) -> Result<Vec<Term>> {
     let mut visited: HashSet<Term> = HashSet::new();
     let mut stack: VecDeque<&Term> = VecDeque::new();
@@ -200,21 +78,27 @@ fn check_reachability(
 
     let non_reachable: Vec<Term> = defined_terms.difference(&visited).cloned().collect();
 
+    if !non_reachable.is_empty() {
+        println!("Found some dead code");
+    }
+
     Ok(non_reachable)
 }
 
 // Ensure that there are no unproductive cycles
 
 fn check_productivity(
-    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
-    term_to_terminal_map: &HashMap<Term, HashSet<Term>>,
     defined_terms: &HashSet<Term>,
+    term_to_terminal_map: &HashMap<Term, HashSet<Term>>,
+    term_to_non_terminal_map: &HashMap<Term, HashSet<Term>>,
 ) -> Result<()> {
     let mut productive: HashSet<Term> = HashSet::new();
 
-    for term in term_to_terminal_map.keys() {
+    for (term, terminal_set) in term_to_terminal_map.iter() {
         // Mark all terminal terms as productive
-        productive.insert(term.clone());
+        if !terminal_set.is_empty() {
+            productive.insert(term.clone());
+        }
     }
 
     loop {
@@ -226,7 +110,7 @@ fn check_productivity(
                 continue;
             }
 
-            if term_to_terminal_map.contains_key(term) {
+            if !term_to_terminal_map.get(term).unwrap().is_empty() {
                 // If the term has atleast one terminal,
                 // mark it as productive and continue
                 productive.insert(term.clone());
@@ -272,51 +156,52 @@ fn check_productivity(
     Ok(())
 }
 
-pub fn check_correctness(grammar: &mut Grammar) -> Result<()> {
-    // Mapping of the non-terminals found in each term
-    let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
-    // Mapping of the terminals found in each term
-    let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
-    let mut defined_terms = check_completeness(
-        grammar,
-        &mut term_to_non_terminal_map,
-        &mut term_to_terminal_map,
-    )?;
+pub fn check_correctness_and_optimize(grammar: &mut Grammar) -> Result<()> {
+    grammar.get_terminal_terms();
+    grammar.get_non_terminal_terms();
+    let mut defined_terms = check_completeness(grammar)?;
 
     let transitive_closures = get_transitive_closures(grammar);
 
     remove_unit_productions(grammar, transitive_closures);
 
+    grammar.get_terminal_terms();
+    grammar.get_non_terminal_terms();
+
     let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
     let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
 
-    get_rhs_non_terminals(
-        grammar,
-        &mut term_to_non_terminal_map,
-        &mut term_to_terminal_map,
-    );
+    for term in defined_terms.iter() {
+        let production = grammar.find_production(term).unwrap();
+        term_to_non_terminal_map
+            .entry(term.clone())
+            .or_default()
+            .extend(production.get_non_terminal_set().clone());
+        term_to_terminal_map
+            .entry(term.clone())
+            .or_default()
+            .extend(production.get_terminal_set().clone());
+    }
 
     let unused_terms = check_reachability(
-        &term_to_non_terminal_map,
         grammar.get_goal(),
         &defined_terms,
+        &term_to_non_terminal_map,
     )?;
 
     grammar.remove_definition(&unused_terms);
 
     for term in unused_terms {
+        defined_terms.remove(&term);
         term_to_non_terminal_map.remove(&term);
         term_to_terminal_map.remove(&term);
-        defined_terms.remove(&term);
     }
 
     check_productivity(
-        &term_to_non_terminal_map,
-        &term_to_terminal_map,
         &defined_terms,
+        &term_to_terminal_map,
+        &term_to_non_terminal_map,
     )?;
-
-    println!("The transformed grammar is\n{}", grammar);
 
     Ok(())
 }
@@ -330,20 +215,20 @@ fn remove_unit_productions(
 
     for (key, closure_set) in transitive_closure_map {
         for nt in closure_set {
+            // Skip the production non terminal itself
             if nt == key {
                 continue;
             }
-            let mut non_unit_productions: Vec<Vec<Term>> = Vec::new();
             if let Some(nt_production) = grammar.find_production(&nt) {
                 // Get the non unit productions of nt
-                non_unit_productions = nt_production.get_non_unit_productions();
-            }
+                let non_unit_productions = nt_production.get_non_unit_productions();
 
-            if let Some(key_production) = grammar.find_production_mut(&key) {
-                // Add the non unit productions of nt into key
-                key_production.add_production(non_unit_productions);
-                // Remove unit production nt from key
-                key_production.remove_production(nt);
+                if let Some(key_production) = grammar.find_production_mut(&key) {
+                    // Remove unit production nt from key
+                    key_production.remove_production(nt);
+                    // Add the non unit productions of nt into key
+                    key_production.add_production(non_unit_productions);
+                }
             }
         }
     }
@@ -427,20 +312,16 @@ mod grammar_tests {
             get_token(";", "TERMINATION"),
         ];
 
-        let grammar = ebnf::parse_grammar(tokens);
+        let result = ebnf::parse_grammar(tokens);
 
-        assert!(grammar.is_ok());
+        assert!(result.is_ok());
 
-        let grammar = grammar.unwrap();
+        let mut grammar = result.unwrap();
 
-        let mut term_to_non_terminal_map = HashMap::new();
-        let mut term_to_terminal_map = HashMap::new();
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
 
-        let defined_terms = check_completeness(
-            &grammar,
-            &mut term_to_non_terminal_map,
-            &mut term_to_terminal_map,
-        );
+        let defined_terms = check_completeness(&grammar);
 
         assert!(defined_terms.is_ok());
 
@@ -463,7 +344,8 @@ mod grammar_tests {
             expected_non_terminal_set,
         );
 
-        assert_eq!(term_to_non_terminal_map, expected_term_to_non_terminal_map);
+        expected_term_to_non_terminal_map
+            .insert(Term::NonTerminal("nt2".to_string()), HashSet::new());
 
         let mut expected_term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
 
@@ -481,12 +363,30 @@ mod grammar_tests {
         expected_term_to_terminal_map
             .insert(Term::NonTerminal("nt2".to_string()), expected_terminal_set);
 
+        //expected_term_to_terminal_map.insert(Term::NonTerminal("".to_string()), HashSet::new());
+
+        let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        for term in defined_terms.iter() {
+            let production = grammar.find_production(term).unwrap();
+            term_to_non_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_non_terminal_set().clone());
+            term_to_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_terminal_set().clone());
+        }
+
         assert_eq!(term_to_terminal_map, expected_term_to_terminal_map);
+        assert_eq!(term_to_non_terminal_map, expected_term_to_non_terminal_map);
 
         let result = check_reachability(
-            &term_to_non_terminal_map,
             grammar.get_goal(),
             &defined_terms,
+            &term_to_non_terminal_map,
         );
 
         assert!(result.is_ok());
@@ -496,9 +396,9 @@ mod grammar_tests {
         assert!(result.is_empty());
 
         let result = check_productivity(
-            &term_to_non_terminal_map,
-            &term_to_terminal_map,
             &defined_terms,
+            &term_to_terminal_map,
+            &term_to_non_terminal_map,
         );
 
         assert!(result.is_ok());
@@ -518,16 +418,13 @@ mod grammar_tests {
 
         assert!(grammar.is_ok());
 
-        let grammar = grammar.unwrap();
+        let mut grammar = grammar.unwrap();
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
 
-        let mut term_to_non_terminal_map = HashMap::new();
-        let mut term_to_terminal_map = HashMap::new();
+        println!("The grammar is {}", grammar);
 
-        let result = check_completeness(
-            &grammar,
-            &mut term_to_non_terminal_map,
-            &mut term_to_terminal_map,
-        );
+        let result = check_completeness(&grammar);
 
         assert!(result.is_err());
 
@@ -552,20 +449,16 @@ mod grammar_tests {
             get_token(";", "TERMINATION"),
         ];
 
-        let grammar = ebnf::parse_grammar(tokens);
+        let result = ebnf::parse_grammar(tokens);
 
-        assert!(grammar.is_ok());
+        assert!(result.is_ok());
 
-        let grammar = grammar.unwrap();
+        let mut grammar = result.unwrap();
 
-        let mut term_to_non_terminal_map = HashMap::new();
-        let mut term_to_terminal_map = HashMap::new();
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
 
-        let defined_terms = check_completeness(
-            &grammar,
-            &mut term_to_non_terminal_map,
-            &mut term_to_terminal_map,
-        );
+        let defined_terms = check_completeness(&grammar);
 
         assert!(defined_terms.is_ok());
 
@@ -594,12 +487,42 @@ mod grammar_tests {
         expected_term_to_terminal_map
             .insert(Term::NonTerminal("nt2".to_string()), expected_terminal_set);
 
+        let expected_non_terminal_set: HashSet<Term> = HashSet::new();
+
+        let mut expected_term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        expected_term_to_non_terminal_map.insert(
+            Term::NonTerminal("test".to_string()),
+            expected_non_terminal_set.clone(),
+        );
+
+        expected_term_to_non_terminal_map.insert(
+            Term::NonTerminal("nt2".to_string()),
+            expected_non_terminal_set,
+        );
+
+        let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        for term in defined_terms.iter() {
+            let production = grammar.find_production(term).unwrap();
+            term_to_non_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_non_terminal_set().clone());
+            term_to_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_terminal_set().clone());
+        }
+
         assert_eq!(term_to_terminal_map, expected_term_to_terminal_map);
+        assert_eq!(term_to_non_terminal_map, expected_term_to_non_terminal_map);
 
         let result = check_reachability(
-            &term_to_non_terminal_map,
             grammar.get_goal(),
             &defined_terms,
+            &term_to_non_terminal_map,
         );
 
         assert!(result.is_ok());
@@ -611,9 +534,9 @@ mod grammar_tests {
         assert!(*result.first().unwrap() == Term::NonTerminal("nt2".to_string()));
 
         let result = check_productivity(
-            &term_to_non_terminal_map,
-            &term_to_terminal_map,
             &defined_terms,
+            &term_to_terminal_map,
+            &term_to_non_terminal_map,
         );
 
         assert!(result.is_ok());
@@ -640,20 +563,31 @@ mod grammar_tests {
 
         assert!(grammar.is_ok());
 
-        let grammar = grammar.unwrap();
+        let mut grammar = grammar.unwrap();
 
-        let mut term_to_non_terminal_map = HashMap::new();
-        let mut term_to_terminal_map = HashMap::new();
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
 
-        let defined_terms = check_completeness(
-            &grammar,
-            &mut term_to_non_terminal_map,
-            &mut term_to_terminal_map,
-        );
+        let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        let defined_terms = check_completeness(&grammar);
 
         assert!(defined_terms.is_ok());
 
         let defined_terms = defined_terms.unwrap();
+
+        for term in defined_terms.iter() {
+            let production = grammar.find_production(term).unwrap();
+            term_to_non_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_non_terminal_set().clone());
+            term_to_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_terminal_set().clone());
+        }
 
         let mut expected_result: HashSet<Term> = HashSet::new();
 
@@ -662,12 +596,12 @@ mod grammar_tests {
         expected_result.insert(Term::NonTerminal("C".to_string()));
 
         let result = check_productivity(
-            &term_to_non_terminal_map,
-            &term_to_terminal_map,
             &defined_terms,
+            &term_to_terminal_map,
+            &term_to_non_terminal_map,
         );
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error, but got {:?}", result);
 
         let result = result.unwrap_err();
 
