@@ -293,7 +293,10 @@ mod grammar_tests {
 
     use crate::{
         ebnf::{self, Term},
-        grammar::{GrammarError, check_productivity, check_reachability, get_transitive_closures},
+        grammar::{
+            GrammarError, check_productivity, check_reachability, get_transitive_closures,
+            remove_unit_productions,
+        },
     };
 
     use super::{check_completeness, grammar_tests_helper::get_token};
@@ -421,8 +424,6 @@ mod grammar_tests {
         let mut grammar = grammar.unwrap();
         grammar.get_terminal_terms();
         grammar.get_non_terminal_terms();
-
-        println!("The grammar is {}", grammar);
 
         let result = check_completeness(&grammar);
 
@@ -691,6 +692,223 @@ mod grammar_tests {
             transitive_closure_map, expected_map,
             "Expected {:?} but got {:?}",
             expected_map, transitive_closure_map
+        );
+    }
+
+    #[test]
+    fn test_unit_production_removal() {
+        let tokens: Vec<Token> = vec![
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("0", "TERMINAL_LITERAL"),
+            get_token("<X>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("1", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("<X>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<X>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("0", "TERMINAL_LITERAL"),
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("00", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let result = ebnf::parse_grammar(tokens);
+
+        assert!(result.is_ok());
+
+        let mut grammar = result.unwrap();
+
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
+
+        let defined_terms = check_completeness(&grammar);
+
+        assert!(defined_terms.is_ok());
+
+        let defined_terms = defined_terms.unwrap();
+
+        let mut expected_result: HashSet<Term> = HashSet::new();
+
+        expected_result.insert(Term::NonTerminal("S".to_string()));
+        expected_result.insert(Term::NonTerminal("A".to_string()));
+        expected_result.insert(Term::NonTerminal("X".to_string()));
+
+        assert_eq!(defined_terms, expected_result);
+
+        let mut expected_non_terminal_set: HashSet<Term> = HashSet::new();
+        expected_non_terminal_set.insert(Term::NonTerminal("A".to_string()));
+        expected_non_terminal_set.insert(Term::NonTerminal("X".to_string()));
+
+        let mut expected_term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        expected_term_to_non_terminal_map.insert(
+            Term::NonTerminal("S".to_string()),
+            expected_non_terminal_set,
+        );
+
+        let mut expected_non_terminal_set = HashSet::new();
+
+        expected_non_terminal_set.insert(Term::NonTerminal("X".to_string()));
+
+        expected_term_to_non_terminal_map.insert(
+            Term::NonTerminal("A".to_string()),
+            expected_non_terminal_set,
+        );
+
+        let mut expected_non_terminal_set = HashSet::new();
+
+        expected_non_terminal_set.insert(Term::NonTerminal("S".to_string()));
+
+        expected_term_to_non_terminal_map.insert(
+            Term::NonTerminal("X".to_string()),
+            expected_non_terminal_set,
+        );
+
+        let mut expected_term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        let mut expected_terminal_set = HashSet::new();
+
+        expected_terminal_set.insert(Term::TerminalLiteral("0".to_string()));
+
+        expected_term_to_terminal_map
+            .insert(Term::NonTerminal("S".to_string()), expected_terminal_set);
+
+        let mut expected_terminal_set = HashSet::new();
+
+        expected_terminal_set.insert(Term::TerminalLiteral("1".to_string()));
+
+        expected_term_to_terminal_map
+            .insert(Term::NonTerminal("A".to_string()), expected_terminal_set);
+
+        let mut expected_terminal_set = HashSet::new();
+
+        expected_terminal_set.insert(Term::TerminalLiteral("0".to_string()));
+        expected_terminal_set.insert(Term::TerminalLiteral("00".to_string()));
+
+        expected_term_to_terminal_map
+            .insert(Term::NonTerminal("X".to_string()), expected_terminal_set);
+
+        let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        for term in defined_terms.iter() {
+            let production = grammar.find_production(term).unwrap();
+            term_to_non_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_non_terminal_set().clone());
+            term_to_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_terminal_set().clone());
+        }
+
+        assert_eq!(term_to_terminal_map, expected_term_to_terminal_map);
+        assert_eq!(term_to_non_terminal_map, expected_term_to_non_terminal_map);
+
+        let transitive_closure_map = get_transitive_closures(&grammar);
+
+        let mut expected_transitive_closure_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        expected_transitive_closure_map.insert(
+            Term::NonTerminal("S".to_string()),
+            HashSet::from([
+                Term::NonTerminal("S".to_string()),
+                Term::NonTerminal("A".to_string()),
+                Term::NonTerminal("X".to_string()),
+            ]),
+        );
+
+        expected_transitive_closure_map.insert(
+            Term::NonTerminal("A".to_string()),
+            HashSet::from([
+                Term::NonTerminal("A".to_string()),
+                Term::NonTerminal("X".to_string()),
+            ]),
+        );
+
+        expected_transitive_closure_map.insert(
+            Term::NonTerminal("X".to_string()),
+            HashSet::from([Term::NonTerminal("X".to_string())]),
+        );
+
+        assert_eq!(transitive_closure_map, expected_transitive_closure_map);
+
+        remove_unit_productions(&mut grammar, transitive_closure_map);
+
+        grammar.get_terminal_terms();
+        grammar.get_non_terminal_terms();
+
+        let mut term_to_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut term_to_non_terminal_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+
+        for term in defined_terms.iter() {
+            let production = grammar.find_production(term).unwrap();
+            term_to_non_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_non_terminal_set().clone());
+            term_to_terminal_map
+                .entry(term.clone())
+                .or_default()
+                .extend(production.get_terminal_set().clone());
+        }
+
+        let result = check_reachability(
+            grammar.get_goal(),
+            &defined_terms,
+            &term_to_non_terminal_map,
+        );
+
+        assert!(result.is_ok());
+
+        let unused_terms = result.unwrap();
+
+        grammar.remove_definition(&unused_terms);
+
+        let tokens: Vec<Token> = vec![
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("1", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("0", "TERMINAL_LITERAL"),
+            get_token("<X>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("00", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("0", "TERMINAL_LITERAL"),
+            get_token("<S>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<X>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("0", "TERMINAL_LITERAL"),
+            get_token("<S>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("00", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let result = ebnf::parse_grammar(tokens);
+
+        assert!(result.is_ok());
+
+        let mut expected_grammar = result.unwrap();
+
+        expected_grammar.get_terminal_terms();
+        expected_grammar.get_non_terminal_terms();
+
+        assert_eq!(
+            grammar, expected_grammar,
+            "Expected\n{}, got\n{}",
+            expected_grammar, grammar
         );
     }
 }
