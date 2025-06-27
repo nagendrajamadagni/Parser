@@ -1,4 +1,4 @@
-use grammar::check_correctness;
+use grammar::check_correctness_and_optimize;
 use lexviz::{
     construct_dfa, construct_minimal_dfa, construct_nfa, construct_scanner, parse_microsyntax_list,
 };
@@ -57,7 +57,9 @@ fn main() -> Result<()> {
 
     let mut grammar = ebnf::parse_grammar(lexed_output).unwrap();
 
-    check_correctness(&mut grammar)?;
+    check_correctness_and_optimize(&mut grammar)?;
+
+    println!("The grammar after optimization is\n{}", grammar);
 
     Ok(())
 }
