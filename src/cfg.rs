@@ -292,11 +292,11 @@ mod grammar_tests {
     use lexviz::scanner::Token;
 
     use crate::{
-        ebnf::{self, Term},
-        grammar::{
+        cfg::{
             GrammarError, check_productivity, check_reachability, get_transitive_closures,
             remove_unit_productions,
         },
+        ebnf::{self, Term},
     };
 
     use super::{check_completeness, grammar_tests_helper::get_token};

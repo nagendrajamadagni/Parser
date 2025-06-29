@@ -1,10 +1,10 @@
-use grammar::check_correctness_and_optimize;
+use cfg::check_correctness_and_optimize;
 use lexviz::{
     construct_dfa, construct_minimal_dfa, construct_nfa, construct_scanner, parse_microsyntax_list,
 };
 
+mod cfg;
 mod ebnf;
-mod grammar;
 
 use color_eyre::eyre::Result;
 
