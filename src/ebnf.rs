@@ -43,7 +43,7 @@ impl fmt::Display for Term {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Production {
     lhs: Term,
-    rhs: Vec<Vec<Term>>,
+    rhs: HashSet<Vec<Term>>,
     terminal_set: HashSet<Term>,
     non_terminal_set: HashSet<Term>,
 }
@@ -200,7 +200,7 @@ impl Production {
         Ok(sequence)
     }
 
-    pub fn get_expressions(&self) -> &Vec<Vec<Term>> {
+    pub fn get_expressions(&self) -> &HashSet<Vec<Term>> {
         &self.rhs
     }
 
@@ -231,7 +231,7 @@ impl Production {
         let lhs = Term::NonTerminal(prod[1..prod.len() - 1].to_string());
 
         //let mut rhs: HashSet<Expression> = HashSet::new();
-        let mut rhs: Vec<Vec<Term>> = Vec::new();
+        let mut rhs: HashSet<Vec<Term>> = HashSet::new();
 
         let mut expression_start = start + 2; // Skip the defines
 
@@ -242,7 +242,7 @@ impl Production {
                 // Parse everything until the alternation as a production rule
                 //terminal_set.extend(Self::get_terminal_terms(&expression));
                 //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
-                rhs.push(expression);
+                rhs.insert(expression);
                 expression_start = pos + 1; // Consume the alternation itself
             }
         }
@@ -253,7 +253,7 @@ impl Production {
         //terminal_set.extend(Self::get_terminal_terms(&expression));
         //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
 
-        rhs.push(expression);
+        rhs.insert(expression);
 
         Ok(Production {
             lhs,
@@ -344,7 +344,7 @@ impl Production {
 
     pub fn add_production(&mut self, productions: Vec<Vec<Term>>) {
         for production in productions {
-            self.rhs.push(production);
+            self.rhs.insert(production);
         }
     }
 
@@ -662,7 +662,7 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![expression_list],
+            rhs: HashSet::from([expression_list]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
         };
@@ -704,7 +704,7 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![expression_list, vec![Term::NonTerminal("6".to_string())]],
+            rhs: HashSet::from([expression_list, vec![Term::NonTerminal("6".to_string())]]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
         };
@@ -798,7 +798,7 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: vec![expression_list.clone()],
+            rhs: HashSet::from([expression_list.clone()]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
         };
