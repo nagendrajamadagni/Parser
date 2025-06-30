@@ -43,9 +43,10 @@ impl fmt::Display for Term {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Production {
     lhs: Term,
-    rhs: HashSet<Vec<Term>>,
+    rhs: Vec<Vec<Term>>,
     terminal_set: HashSet<Term>,
     non_terminal_set: HashSet<Term>,
+    deduplication_set: HashSet<Vec<Term>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,7 +201,7 @@ impl Production {
         Ok(sequence)
     }
 
-    pub fn get_expressions(&self) -> &HashSet<Vec<Term>> {
+    pub fn get_expressions(&self) -> &Vec<Vec<Term>> {
         &self.rhs
     }
 
@@ -211,6 +212,7 @@ impl Production {
     fn parse(tokens: &Vec<Token>, start: usize, end: usize) -> Result<Self> {
         let terminal_set = HashSet::new();
         let non_terminal_set = HashSet::new();
+        let mut deduplication_set = HashSet::new();
 
         if tokens[start].get_category() != "NON_TERMINAL" {
             let err = Report::new(ParseError::InvalidProductionLHS(
@@ -231,7 +233,7 @@ impl Production {
         let lhs = Term::NonTerminal(prod[1..prod.len() - 1].to_string());
 
         //let mut rhs: HashSet<Expression> = HashSet::new();
-        let mut rhs: HashSet<Vec<Term>> = HashSet::new();
+        let mut rhs: Vec<Vec<Term>> = Vec::new();
 
         let mut expression_start = start + 2; // Skip the defines
 
@@ -240,9 +242,11 @@ impl Production {
                 let expression: Vec<Term> =
                     Self::parse_expression(tokens, expression_start, pos - 1)?;
                 // Parse everything until the alternation as a production rule
-                //terminal_set.extend(Self::get_terminal_terms(&expression));
-                //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
-                rhs.insert(expression);
+
+                if !deduplication_set.contains(&expression) {
+                    rhs.push(expression.clone());
+                    deduplication_set.insert(expression);
+                }
                 expression_start = pos + 1; // Consume the alternation itself
             }
         }
@@ -250,16 +254,17 @@ impl Production {
         // Parse the last production rule before the termination
         let expression = Self::parse_expression(tokens, expression_start, end)?;
 
-        //terminal_set.extend(Self::get_terminal_terms(&expression));
-        //non_terminal_set.extend(Self::get_non_terminal_terms(&expression));
-
-        rhs.insert(expression);
+        if !deduplication_set.contains(&expression) {
+            rhs.push(expression.clone());
+            deduplication_set.insert(expression);
+        }
 
         Ok(Production {
             lhs,
             rhs,
             terminal_set,
             non_terminal_set,
+            deduplication_set,
         })
     }
 
@@ -332,6 +337,8 @@ impl Production {
 
     pub fn remove_production(&mut self, key: Term) {
         self.rhs.retain(|exp| exp.len() != 1 || exp[0] != key);
+        self.deduplication_set
+            .retain(|exp| exp.len() != 1 || exp[0] != key);
     }
 
     pub fn get_non_unit_productions(&self) -> Vec<Vec<Term>> {
@@ -344,7 +351,9 @@ impl Production {
 
     pub fn add_production(&mut self, productions: Vec<Vec<Term>>) {
         for production in productions {
-            self.rhs.insert(production);
+            if !self.deduplication_set.contains(&production) {
+                self.rhs.push(production);
+            }
         }
     }
 
@@ -662,9 +671,10 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: HashSet::from([expression_list]),
+            rhs: Vec::from([expression_list.clone()]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
+            deduplication_set: HashSet::from([expression_list]),
         };
 
         assert_eq!(expected_production, production);
@@ -704,9 +714,16 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: HashSet::from([expression_list, vec![Term::NonTerminal("6".to_string())]]),
+            rhs: Vec::from([
+                expression_list.clone(),
+                vec![Term::NonTerminal("6".to_string())],
+            ]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
+            deduplication_set: HashSet::from([
+                expression_list,
+                vec![Term::NonTerminal("6".to_string())],
+            ]),
         };
 
         assert_eq!(production, expected_production);
@@ -798,9 +815,10 @@ mod ebnf_parser_tests {
 
         let expected_production = Production {
             lhs: Term::NonTerminal("test".to_string()),
-            rhs: HashSet::from([expression_list.clone()]),
+            rhs: Vec::from([expression_list.clone()]),
             terminal_set: HashSet::new(),
             non_terminal_set: HashSet::new(),
+            deduplication_set: HashSet::from([expression_list.clone()]),
         };
 
         let expected_grammar = Grammar {
