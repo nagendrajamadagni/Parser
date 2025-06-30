@@ -352,7 +352,8 @@ impl Production {
     pub fn add_production(&mut self, productions: Vec<Vec<Term>>) {
         for production in productions {
             if !self.deduplication_set.contains(&production) {
-                self.rhs.push(production);
+                self.rhs.push(production.clone());
+                self.deduplication_set.insert(production);
             }
         }
     }
