@@ -208,17 +208,13 @@ pub fn check_correctness_and_optimize(grammar: &mut Grammar) -> Result<()> {
 
 fn remove_unit_productions(
     grammar: &mut Grammar,
-    transitive_closure_map: HashMap<Term, HashSet<Term>>,
+    transitive_closure_map: HashMap<Term, Vec<Term>>,
 ) {
     // For each pair in the transitive closure, add the non unit productions, remove the unit
     // productions
 
     for (key, closure_set) in transitive_closure_map {
         for nt in closure_set {
-            // Skip the production non terminal itself
-            if nt == key {
-                continue;
-            }
             if let Some(nt_production) = grammar.find_production(&nt) {
                 // Get the non unit productions of nt
                 let non_unit_productions = nt_production.get_non_unit_productions();
@@ -234,8 +230,8 @@ fn remove_unit_productions(
     }
 }
 
-fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
-    let mut transitive_closures: HashMap<Term, HashSet<Term>> = HashMap::new();
+fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, Vec<Term>> {
+    let mut transitive_closures: HashMap<Term, Vec<Term>> = HashMap::new();
 
     let mut queue: VecDeque<Term> = VecDeque::new();
 
@@ -244,7 +240,8 @@ fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
 
     for production in grammar.get_productions() {
         let left_non_terminal = production.get_left_term();
-        let mut value_set: HashSet<Term> = HashSet::from([left_non_terminal.clone()]);
+        let mut value_list: Vec<Term> = Vec::new();
+        let mut visited_set: HashSet<Term> = HashSet::from([left_non_terminal.clone()]);
         queue.push_back(left_non_terminal.clone()); // Insert the element into the queue
 
         // Start BFS
@@ -263,14 +260,15 @@ fn get_transitive_closures(grammar: &Grammar) -> HashMap<Term, HashSet<Term>> {
             // the queue.
 
             unit_non_terminals.iter().for_each(|nt| {
-                if !value_set.contains(nt) {
+                if !visited_set.contains(nt) {
                     queue.push_back(nt.clone());
-                    value_set.insert(nt.clone());
+                    visited_set.insert(nt.clone());
+                    value_list.push(nt.clone())
                 }
             });
         }
 
-        transitive_closures.insert(left_non_terminal.clone(), value_set);
+        transitive_closures.insert(left_non_terminal.clone(), value_list);
     }
 
     transitive_closures
@@ -652,8 +650,7 @@ mod grammar_tests {
         let expected_map = HashMap::from([
             (
                 Term::NonTerminal("S".to_string()),
-                HashSet::from([
-                    Term::NonTerminal("S".to_string()),
+                Vec::from([
                     Term::NonTerminal("A".to_string()),
                     Term::NonTerminal("B".to_string()),
                     Term::NonTerminal("C".to_string()),
@@ -661,29 +658,26 @@ mod grammar_tests {
             ),
             (
                 Term::NonTerminal("A".to_string()),
-                HashSet::from([
-                    Term::NonTerminal("S".to_string()),
-                    Term::NonTerminal("A".to_string()),
+                Vec::from([
                     Term::NonTerminal("B".to_string()),
                     Term::NonTerminal("C".to_string()),
+                    Term::NonTerminal("S".to_string()),
                 ]),
             ),
             (
                 Term::NonTerminal("B".to_string()),
-                HashSet::from([
+                Vec::from([
+                    Term::NonTerminal("C".to_string()),
                     Term::NonTerminal("S".to_string()),
                     Term::NonTerminal("A".to_string()),
-                    Term::NonTerminal("B".to_string()),
-                    Term::NonTerminal("C".to_string()),
                 ]),
             ),
             (
                 Term::NonTerminal("C".to_string()),
-                HashSet::from([
+                Vec::from([
                     Term::NonTerminal("S".to_string()),
                     Term::NonTerminal("A".to_string()),
                     Term::NonTerminal("B".to_string()),
-                    Term::NonTerminal("C".to_string()),
                 ]),
             ),
         ]);
@@ -713,10 +707,10 @@ mod grammar_tests {
             get_token(";", "TERMINATION"),
             get_token("<X>", "NON_TERMINAL"),
             get_token("::=", "DEFINES"),
+            get_token("00", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
             get_token("0", "TERMINAL_LITERAL"),
             get_token("<S>", "NON_TERMINAL"),
-            get_token("|", "ALTERNATION"),
-            get_token("00", "TERMINAL_LITERAL"),
             get_token(";", "TERMINATION"),
         ];
 
@@ -816,12 +810,11 @@ mod grammar_tests {
 
         let transitive_closure_map = get_transitive_closures(&grammar);
 
-        let mut expected_transitive_closure_map: HashMap<Term, HashSet<Term>> = HashMap::new();
+        let mut expected_transitive_closure_map: HashMap<Term, Vec<Term>> = HashMap::new();
 
         expected_transitive_closure_map.insert(
             Term::NonTerminal("S".to_string()),
-            HashSet::from([
-                Term::NonTerminal("S".to_string()),
+            Vec::from([
                 Term::NonTerminal("A".to_string()),
                 Term::NonTerminal("X".to_string()),
             ]),
@@ -829,16 +822,10 @@ mod grammar_tests {
 
         expected_transitive_closure_map.insert(
             Term::NonTerminal("A".to_string()),
-            HashSet::from([
-                Term::NonTerminal("A".to_string()),
-                Term::NonTerminal("X".to_string()),
-            ]),
+            Vec::from([Term::NonTerminal("X".to_string())]),
         );
 
-        expected_transitive_closure_map.insert(
-            Term::NonTerminal("X".to_string()),
-            HashSet::from([Term::NonTerminal("X".to_string())]),
-        );
+        expected_transitive_closure_map.insert(Term::NonTerminal("X".to_string()), Vec::from([]));
 
         assert_eq!(transitive_closure_map, expected_transitive_closure_map);
 
@@ -877,10 +864,10 @@ mod grammar_tests {
         let tokens: Vec<Token> = vec![
             get_token("<S>", "NON_TERMINAL"),
             get_token("::=", "DEFINES"),
-            get_token("1", "TERMINAL_LITERAL"),
-            get_token("|", "ALTERNATION"),
             get_token("0", "TERMINAL_LITERAL"),
             get_token("<X>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("1", "TERMINAL_LITERAL"),
             get_token("|", "ALTERNATION"),
             get_token("00", "TERMINAL_LITERAL"),
             get_token("|", "ALTERNATION"),
@@ -889,10 +876,10 @@ mod grammar_tests {
             get_token(";", "TERMINATION"),
             get_token("<X>", "NON_TERMINAL"),
             get_token("::=", "DEFINES"),
+            get_token("00", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
             get_token("0", "TERMINAL_LITERAL"),
             get_token("<S>", "NON_TERMINAL"),
-            get_token("|", "ALTERNATION"),
-            get_token("00", "TERMINAL_LITERAL"),
             get_token(";", "TERMINATION"),
         ];
 
@@ -906,7 +893,7 @@ mod grammar_tests {
         expected_grammar.get_non_terminal_terms();
 
         assert_eq!(
-            grammar, expected_grammar,
+            expected_grammar, grammar,
             "Expected\n{}, got\n{}",
             expected_grammar, grammar
         );
