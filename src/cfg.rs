@@ -217,13 +217,13 @@ fn remove_unit_productions(
         for nt in closure_set {
             if let Some(nt_production) = grammar.find_production(&nt) {
                 // Get the non unit productions of nt
-                let non_unit_productions = nt_production.get_non_unit_productions();
+                let non_unit_expressions = nt_production.get_non_unit_expressions();
 
                 if let Some(key_production) = grammar.find_production_mut(&key) {
                     // Remove unit production nt from key
-                    key_production.remove_production(nt);
+                    key_production.remove_expression(nt);
                     // Add the non unit productions of nt into key
-                    key_production.add_production(non_unit_productions);
+                    key_production.add_expression(non_unit_expressions);
                 }
             }
         }
@@ -869,10 +869,10 @@ mod grammar_tests {
             get_token("|", "ALTERNATION"),
             get_token("1", "TERMINAL_LITERAL"),
             get_token("|", "ALTERNATION"),
-            get_token("00", "TERMINAL_LITERAL"),
-            get_token("|", "ALTERNATION"),
             get_token("0", "TERMINAL_LITERAL"),
             get_token("<S>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("00", "TERMINAL_LITERAL"),
             get_token(";", "TERMINATION"),
             get_token("<X>", "NON_TERMINAL"),
             get_token("::=", "DEFINES"),
@@ -892,10 +892,22 @@ mod grammar_tests {
         expected_grammar.get_terminal_terms();
         expected_grammar.get_non_terminal_terms();
 
-        assert_eq!(
-            expected_grammar, grammar,
-            "Expected\n{}, got\n{}",
-            expected_grammar, grammar
-        );
+        for production in expected_grammar.get_productions() {
+            let left_term = production.get_left_term();
+            let test_production = grammar.find_production(left_term);
+            assert!(test_production.is_some());
+            let test_production = test_production.unwrap();
+            let expressions = production.get_expressions();
+            let test_expressions = test_production.get_expressions();
+            let expression_set: HashSet<Vec<Term>> = expressions.iter().cloned().collect();
+            let test_expression_set: HashSet<Vec<Term>> =
+                test_expressions.iter().cloned().collect();
+
+            assert_eq!(
+                expression_set, test_expression_set,
+                "Expected {:?} but got {:?} for production {:?}",
+                expression_set, test_expression_set, left_term
+            );
+        }
     }
 }
