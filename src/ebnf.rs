@@ -119,7 +119,7 @@ impl Production {
             let word = &tokens[idx].get_token();
             let category = &tokens[idx].get_category();
 
-            let next_category = if idx == end {
+            let mut next_category = if idx == end {
                 None
             } else {
                 Some(tokens[idx + 1].get_category())
@@ -155,6 +155,14 @@ impl Production {
 
                     let inner_expression = Self::parse_expression(tokens, idx + 1, rparen_idx - 1)?;
                     idx = rparen_idx;
+                    next_category = if idx == end {
+                        // Now that we parsed the inner expression and
+                        // moved the pointer, we need to recheck the
+                        // next category
+                        None
+                    } else {
+                        Some(tokens[idx + 1].get_category())
+                    };
                     Term::Group(inner_expression)
                 }
                 _ => {
@@ -198,6 +206,10 @@ impl Production {
         }
 
         Ok(sequence)
+    }
+
+    pub fn get_expressions_mut(&mut self) -> &mut Vec<Vec<Term>> {
+        &mut self.rhs
     }
 
     pub fn get_expressions(&self) -> &Vec<Vec<Term>> {
@@ -401,6 +413,10 @@ impl Grammar {
 
     pub fn get_productions(&self) -> &Vec<Production> {
         &self.productions
+    }
+
+    pub fn get_productions_mut(&mut self) -> &mut Vec<Production> {
+        &mut self.productions
     }
 
     pub fn remove_definition(&mut self, removal_list: &Vec<Term>) {
