@@ -14,7 +14,7 @@ fn get_ebnf_mst_list() -> Vec<(String, String)> {
     let ebnf_mst_list: Vec<(String, String)> = vec![
         ("<[A-Za-z0-9-]+>".to_string(), "NON_TERMINAL".to_string()),
         (
-            "\"[A-Za-z0-9-:'!+<>=*()]+\"".to_string(),
+            "\"[A-Za-z0-9-:'!+<>=*()/%]+\"".to_string(),
             "TERMINAL_LITERAL".to_string(),
         ),
         ("[A-Z]+".to_string(), "TERMINAL_CATEGORY".to_string()),
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
-    let diamondback_ebnf = "left_recursion.ebnf".to_string();
+    let diamondback_ebnf = "expr.ebnf".to_string();
 
     let syntax_tree_list = parse_microsyntax_list(ebnf_mst_list).unwrap();
 
