@@ -21,7 +21,13 @@ pub enum Term {
 impl fmt::Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TerminalLiteral(literal) => write!(f, "{}", literal),
+            Self::TerminalLiteral(literal) => {
+                if literal.is_empty() {
+                    write!(f, "ɛ")
+                } else {
+                    write!(f, "{}", literal)
+                }
+            }
             Self::TerminalCategory(category) => write!(f, "{}", category),
             Self::NonTerminal(non_terminal) => write!(f, "<{}>", non_terminal),
             Self::Group(inner_terms) => {
@@ -427,6 +433,23 @@ impl Grammar {
                 .position(|x| *x.get_left_term() == *prod)
             {
                 self.productions.remove(pos);
+            }
+        }
+    }
+
+    pub fn add_definition(&mut self, left_term: Term, definition: Vec<Vec<Term>>) {
+        match self.find_production_mut(&left_term) {
+            Some(production) => {
+                production.add_expression(definition);
+            }
+            None => {
+                let new_production = Production {
+                    lhs: left_term,
+                    rhs: definition,
+                    terminal_set: HashSet::new(),
+                    non_terminal_set: HashSet::new(),
+                };
+                self.productions.push(new_production);
             }
         }
     }
