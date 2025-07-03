@@ -21,14 +21,14 @@ pub enum Term {
 impl fmt::Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TerminalLiteral(literal) => {
-                if literal.is_empty() {
-                    write!(f, "ɛ")
+            Self::TerminalLiteral(literal) => write!(f, "{}", literal),
+            Self::TerminalCategory(category) => {
+                if category == "EPSILON" {
+                    write!(f, "𝛆")
                 } else {
-                    write!(f, "{}", literal)
+                    write!(f, "{}", category)
                 }
             }
-            Self::TerminalCategory(category) => write!(f, "{}", category),
             Self::NonTerminal(non_terminal) => write!(f, "<{}>", non_terminal),
             Self::Group(inner_terms) => {
                 write!(f, "(")?;
