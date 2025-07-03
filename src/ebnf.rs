@@ -22,7 +22,13 @@ impl fmt::Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TerminalLiteral(literal) => write!(f, "{}", literal),
-            Self::TerminalCategory(category) => write!(f, "{}", category),
+            Self::TerminalCategory(category) => {
+                if category == "EPSILON" {
+                    write!(f, "𝛆")
+                } else {
+                    write!(f, "{}", category)
+                }
+            }
             Self::NonTerminal(non_terminal) => write!(f, "<{}>", non_terminal),
             Self::Group(inner_terms) => {
                 write!(f, "(")?;
@@ -119,7 +125,7 @@ impl Production {
             let word = &tokens[idx].get_token();
             let category = &tokens[idx].get_category();
 
-            let next_category = if idx == end {
+            let mut next_category = if idx == end {
                 None
             } else {
                 Some(tokens[idx + 1].get_category())
@@ -155,6 +161,14 @@ impl Production {
 
                     let inner_expression = Self::parse_expression(tokens, idx + 1, rparen_idx - 1)?;
                     idx = rparen_idx;
+                    next_category = if idx == end {
+                        // Now that we parsed the inner expression and
+                        // moved the pointer, we need to recheck the
+                        // next category
+                        None
+                    } else {
+                        Some(tokens[idx + 1].get_category())
+                    };
                     Term::Group(inner_expression)
                 }
                 _ => {
@@ -198,6 +212,10 @@ impl Production {
         }
 
         Ok(sequence)
+    }
+
+    pub fn get_expressions_mut(&mut self) -> &mut Vec<Vec<Term>> {
+        &mut self.rhs
     }
 
     pub fn get_expressions(&self) -> &Vec<Vec<Term>> {
@@ -403,6 +421,10 @@ impl Grammar {
         &self.productions
     }
 
+    pub fn get_productions_mut(&mut self) -> &mut Vec<Production> {
+        &mut self.productions
+    }
+
     pub fn remove_definition(&mut self, removal_list: &Vec<Term>) {
         for prod in removal_list {
             if let Some(pos) = self
@@ -411,6 +433,23 @@ impl Grammar {
                 .position(|x| *x.get_left_term() == *prod)
             {
                 self.productions.remove(pos);
+            }
+        }
+    }
+
+    pub fn add_definition(&mut self, left_term: Term, definition: Vec<Vec<Term>>) {
+        match self.find_production_mut(&left_term) {
+            Some(production) => {
+                production.add_expression(definition);
+            }
+            None => {
+                let new_production = Production {
+                    lhs: left_term,
+                    rhs: definition,
+                    terminal_set: HashSet::new(),
+                    non_terminal_set: HashSet::new(),
+                };
+                self.productions.push(new_production);
             }
         }
     }

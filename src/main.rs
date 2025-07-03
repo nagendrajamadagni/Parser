@@ -5,14 +5,16 @@ use lexviz::{
 
 mod cfg;
 mod ebnf;
+mod ll;
 
 use color_eyre::eyre::Result;
+use ll::check_ll1_compliance;
 
 fn get_ebnf_mst_list() -> Vec<(String, String)> {
     let ebnf_mst_list: Vec<(String, String)> = vec![
         ("<[A-Za-z0-9-]+>".to_string(), "NON_TERMINAL".to_string()),
         (
-            "\"[A-Za-z0-9-:'!+<>=*()]+\"".to_string(),
+            "\"[A-Za-z0-9-:'!+<>=*()/%]+\"".to_string(),
             "TERMINAL_LITERAL".to_string(),
         ),
         ("[A-Z]+".to_string(), "TERMINAL_CATEGORY".to_string()),
@@ -34,7 +36,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let ebnf_mst_list = get_ebnf_mst_list();
 
-    let diamondback_ebnf = "unit_productions.ebnf".to_string();
+    let diamondback_ebnf = "new_left_recursion.ebnf".to_string();
 
     let syntax_tree_list = parse_microsyntax_list(ebnf_mst_list).unwrap();
 
@@ -58,6 +60,8 @@ fn main() -> Result<()> {
     let mut grammar = ebnf::parse_grammar(lexed_output).unwrap();
 
     check_correctness_and_optimize(&mut grammar)?;
+
+    check_ll1_compliance(&mut grammar)?;
 
     println!("The grammar after optimization is\n{}", grammar);
 
