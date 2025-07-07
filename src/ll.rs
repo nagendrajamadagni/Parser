@@ -1,8 +1,77 @@
 use crate::ebnf::Grammar;
+use crate::ebnf::Production;
 use crate::ebnf::Term;
 use eyre::Result;
 use std::collections::HashMap;
 use std::collections::HashSet;
+
+fn substitute_left_most_term(
+    target_expression: &[Term],
+    sub_production: &Production,
+) -> Vec<Vec<Term>> {
+    let left_most = &target_expression[0];
+
+    let mut final_expressions: Vec<Vec<Term>> = Vec::new();
+
+    match left_most {
+        Term::TerminalLiteral(_) | Term::TerminalCategory(_) | Term::NonTerminal(_) => {
+            let expression = &target_expression[1..];
+            // Removed the left most term, need to append the productions
+            for sub_expression in sub_production.get_expressions() {
+                let mut prepend_expression = sub_expression.clone();
+                prepend_expression.extend(expression.iter().cloned());
+                final_expressions.push(prepend_expression);
+            }
+        }
+        Term::Group(inner_expression) => {
+            // Substitute the terms for the left most term in the inner expression
+            let final_inner_expressions =
+                substitute_left_most_term(inner_expression, sub_production);
+
+            // Make the inner expression back into a group
+            let mut grouped_terms: Vec<Vec<Term>> = Vec::new();
+            for exp in final_inner_expressions {
+                grouped_terms.push(vec![Term::Group(exp)]);
+            }
+            // Extend the group with the remaining terms in the target expression
+            for exp in grouped_terms.iter_mut() {
+                exp.extend_from_slice(&target_expression[1..]);
+            }
+            final_expressions.extend(grouped_terms);
+        }
+        Term::Repetition(inner_term, repetition_type) => {
+            let final_inner_expressions =
+                substitute_left_most_term(&[*inner_term.clone()], sub_production);
+
+            // Make the inner expressions also into repetitions
+
+            let mut repetition_expressions: Vec<Vec<Term>> = Vec::new();
+
+            for exp in final_inner_expressions {
+                let num_expressions = exp.len();
+                if num_expressions > 1 {
+                    repetition_expressions.push(vec![Term::Repetition(
+                        Box::new(Term::Group(exp)),
+                        repetition_type.clone(),
+                    )]);
+                } else {
+                    repetition_expressions.push(vec![Term::Repetition(
+                        Box::new(exp[0].clone()),
+                        repetition_type.clone(),
+                    )]);
+                }
+            }
+
+            for exp in repetition_expressions.iter_mut() {
+                exp.extend_from_slice(&target_expression[1..]);
+            }
+
+            final_expressions.extend(repetition_expressions);
+        }
+    }
+
+    final_expressions
+}
 
 fn remove_left_most_term(expression: &mut Vec<Term>) {
     let mut left_most = &mut expression[0];
@@ -44,37 +113,88 @@ fn get_left_most_term(expression: &[Term]) -> &Term {
 }
 
 fn eliminate_left_recursion(grammar: &mut Grammar) {
-    let productions = grammar.get_productions_mut();
     let mut previous_non_terminals: HashSet<Term> = HashSet::new();
-
     let mut definitions_to_be_added: HashMap<Term, Vec<Vec<Term>>> = HashMap::new();
 
-    for production in productions.iter_mut() {
+    let num_productions = grammar.get_productions().len();
+
+    for idx in 0..num_productions {
         // We have the list of all previous non terminals until this point
         // Check within each expression of pi, if the left-most term is a previously present non
         // terminal
 
-        let pi_left_term = production.get_left_term().clone();
+        let pi_left_term = {
+            let productions = grammar.get_productions();
+            productions[idx].get_left_term().clone()
+        };
 
-        if !production
-            .get_non_terminal_set()
-            .is_disjoint(&previous_non_terminals)
-        {
+        let needs_substitution = {
+            let productions = grammar.get_productions();
+            let production = &productions[idx];
+            !production
+                .get_non_terminal_set()
+                .is_disjoint(&previous_non_terminals)
+        };
+
+        if needs_substitution {
             // Our current production references a previously encountered non-terminal. We may need
             // to substitute this term
-            let pi_expressions = production.get_expressions_mut();
-            for pi_exp in pi_expressions.iter() {
-                let left_most_term = get_left_most_term(pi_exp);
-                if previous_non_terminals.contains(left_most_term) {
-                    // If the left-most term is a previously present non terminal, replace it with its
-                    // productions
+
+            let num_expressions = {
+                let productions = grammar.get_productions();
+                let production = &productions[idx];
+                production.get_expressions().len()
+            };
+
+            for exp_idx in 0..num_expressions {
+                let (needs_sub, left_most_term) = {
+                    let productions = grammar.get_productions();
+                    let production = &productions[idx];
+                    let pi_exp = &production.get_expressions()[exp_idx];
+                    let left_most_term = get_left_most_term(pi_exp);
+                    let needs_sub = previous_non_terminals.contains(left_most_term);
+                    (needs_sub, left_most_term.clone())
+                };
+
+                // If the left-most term is a previously present non terminal, replace it with its
+                // productions
+                if needs_sub {
+                    let pi_exp = &grammar.get_productions()[idx].get_expressions()[exp_idx];
                     println!(
                         "Need to replace {} in the expression {:?}",
                         left_most_term, pi_exp
                     );
+
+                    // Find the production whose expressions need to be substituted in pi_exp
+
+                    let sub_production = grammar.find_production(&left_most_term).cloned();
+
+                    if let Some(sub_production) = sub_production {
+                        // If there exists a production whose expressions we can substitute
+                        let productions = grammar.get_productions_mut();
+                        // This is the expression which we will be substituting the term with its
+                        // expressions
+                        let target_expression = productions[idx].get_expressions()[exp_idx].clone();
+
+                        // First we remove the expression from the production
+
+                        productions[idx].remove_expression(&target_expression);
+
+                        // Then we create new expressions after replacing the non terminal with its
+                        // expressions
+
+                        let expressions_to_add =
+                            substitute_left_most_term(&target_expression, &sub_production);
+
+                        // Then we add all the new expressions into the production
+
+                        productions[idx].add_expression(&expressions_to_add);
+                    }
                 }
             }
         }
+
+        let production = &mut grammar.get_productions_mut()[idx];
 
         if production.get_non_terminal_set().contains(&pi_left_term) {
             // Recursion present, may or may not be left recursion
