@@ -221,9 +221,9 @@ fn remove_unit_productions(
 
                 if let Some(key_production) = grammar.find_production_mut(&key) {
                     // Remove unit production nt from key
-                    key_production.remove_expression(nt);
+                    key_production.remove_unit_expression(nt);
                     // Add the non unit productions of nt into key
-                    key_production.add_expression(non_unit_expressions);
+                    key_production.add_expression(&non_unit_expressions);
                 }
             }
         }

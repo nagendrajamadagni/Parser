@@ -351,7 +351,7 @@ impl Production {
             .collect()
     }
 
-    pub fn remove_expression(&mut self, key: Term) {
+    pub fn remove_unit_expression(&mut self, key: Term) {
         self.rhs.retain(|exp| exp.len() != 1 || exp[0] != key);
     }
 
@@ -363,15 +363,19 @@ impl Production {
             .collect()
     }
 
-    pub fn add_expression(&mut self, expressions: Vec<Vec<Term>>) {
+    pub fn add_expression(&mut self, expressions: &Vec<Vec<Term>>) {
         let mut deduplication_set: HashSet<Vec<Term>> = HashSet::new();
         deduplication_set.extend(self.rhs.clone());
         for expression in expressions {
-            if !deduplication_set.contains(&expression) {
+            if !deduplication_set.contains(expression) {
                 self.rhs.push(expression.clone());
                 deduplication_set.insert(expression.clone());
             }
         }
+    }
+
+    pub fn remove_expression(&mut self, expression: &Vec<Term>) {
+        self.rhs.retain(|exp| exp != expression);
     }
 
     pub fn get_terminal_set(&self) -> &HashSet<Term> {
@@ -440,7 +444,7 @@ impl Grammar {
     pub fn add_definition(&mut self, left_term: Term, definition: Vec<Vec<Term>>) {
         match self.find_production_mut(&left_term) {
             Some(production) => {
-                production.add_expression(definition);
+                production.add_expression(&definition);
             }
             None => {
                 let new_production = Production {
