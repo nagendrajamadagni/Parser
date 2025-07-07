@@ -284,7 +284,7 @@ impl Production {
         })
     }
 
-    fn get_terminal_terms(expression: &Vec<Term>) -> HashSet<Term> {
+    fn get_terminal_terms_in_expression(expression: &Vec<Term>) -> HashSet<Term> {
         let mut terminal_set = HashSet::new();
 
         for term in expression {
@@ -297,12 +297,13 @@ impl Production {
                 }
                 Term::NonTerminal(_) => {}
                 Term::Group(group) => {
-                    let group_terminals = Self::get_terminal_terms(group);
+                    let group_terminals = Self::get_terminal_terms_in_expression(group);
                     terminal_set.extend(group_terminals);
                 }
                 Term::Repetition(boxed_term, _) => {
                     let boxed_term = boxed_term.clone();
-                    let repetition_terminals = Self::get_terminal_terms(&vec![*boxed_term]);
+                    let repetition_terminals =
+                        Self::get_terminal_terms_in_expression(&vec![*boxed_term]);
                     terminal_set.extend(repetition_terminals);
                 }
             };
@@ -311,7 +312,7 @@ impl Production {
         terminal_set
     }
 
-    fn get_non_terminal_terms(expression: &Vec<Term>) -> HashSet<Term> {
+    fn get_non_terminal_terms_in_expression(expression: &Vec<Term>) -> HashSet<Term> {
         let mut non_terminal_set = HashSet::new();
 
         for term in expression {
@@ -322,12 +323,13 @@ impl Production {
                     non_terminal_set.insert(term.clone());
                 }
                 Term::Group(group) => {
-                    let group_terminals = Self::get_non_terminal_terms(group);
+                    let group_terminals = Self::get_non_terminal_terms_in_expression(group);
                     non_terminal_set.extend(group_terminals);
                 }
                 Term::Repetition(boxed_term, _) => {
                     let boxed_term = boxed_term.clone();
-                    let repetition_terminals = Self::get_non_terminal_terms(&vec![*boxed_term]);
+                    let repetition_terminals =
+                        Self::get_non_terminal_terms_in_expression(&vec![*boxed_term]);
                     non_terminal_set.extend(repetition_terminals);
                 }
             };
@@ -385,26 +387,34 @@ impl Production {
     pub fn get_non_terminal_set(&self) -> &HashSet<Term> {
         &self.non_terminal_set
     }
+
+    pub fn get_non_terminal_terms(&mut self) {
+        self.non_terminal_set = HashSet::new();
+        for expression in &self.rhs {
+            let non_terminal_terms = Production::get_non_terminal_terms_in_expression(expression);
+            self.non_terminal_set.extend(non_terminal_terms);
+        }
+    }
+
+    pub fn get_terminal_terms(&mut self) {
+        self.terminal_set = HashSet::new();
+        for expression in &self.rhs {
+            let terminal_terms = Production::get_terminal_terms_in_expression(expression);
+            self.terminal_set.extend(terminal_terms);
+        }
+    }
 }
 
 impl Grammar {
     pub fn get_terminal_terms(&mut self) {
         for production in self.productions.iter_mut() {
-            production.terminal_set = HashSet::new();
-            for expression in &production.rhs {
-                let terminal_terms = Production::get_terminal_terms(expression);
-                production.terminal_set.extend(terminal_terms);
-            }
+            production.get_terminal_terms();
         }
     }
 
     pub fn get_non_terminal_terms(&mut self) {
         for production in self.productions.iter_mut() {
-            production.non_terminal_set = HashSet::new();
-            for expression in &production.rhs {
-                let non_terminal_terms = Production::get_non_terminal_terms(expression);
-                production.non_terminal_set.extend(non_terminal_terms);
-            }
+            production.get_non_terminal_terms();
         }
     }
     pub fn get_goal(&self) -> &Term {
@@ -990,7 +1000,7 @@ mod ebnf_parser_tests {
             ),
         ];
 
-        let terminal_set = Production::get_terminal_terms(&terms);
+        let terminal_set = Production::get_terminal_terms_in_expression(&terms);
 
         let expected_set = HashSet::from([
             Term::TerminalLiteral("term1".to_string()),
@@ -1027,7 +1037,7 @@ mod ebnf_parser_tests {
             ),
         ];
 
-        let non_terminal_set = Production::get_non_terminal_terms(&terms);
+        let non_terminal_set = Production::get_non_terminal_terms_in_expression(&terms);
 
         let expected_set = HashSet::from([
             Term::NonTerminal("nonterm1".to_string()),

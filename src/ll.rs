@@ -159,12 +159,6 @@ fn eliminate_left_recursion(grammar: &mut Grammar) {
                 // If the left-most term is a previously present non terminal, replace it with its
                 // productions
                 if needs_sub {
-                    let pi_exp = &grammar.get_productions()[idx].get_expressions()[exp_idx];
-                    println!(
-                        "Need to replace {} in the expression {:?}",
-                        left_most_term, pi_exp
-                    );
-
                     // Find the production whose expressions need to be substituted in pi_exp
 
                     let sub_production = grammar.find_production(&left_most_term).cloned();
@@ -195,6 +189,8 @@ fn eliminate_left_recursion(grammar: &mut Grammar) {
         }
 
         let production = &mut grammar.get_productions_mut()[idx];
+
+        production.get_non_terminal_terms();
 
         if production.get_non_terminal_set().contains(&pi_left_term) {
             // Recursion present, may or may not be left recursion
@@ -274,4 +270,163 @@ fn eliminate_left_recursion(grammar: &mut Grammar) {
 pub fn check_ll1_compliance(grammar: &mut Grammar) -> Result<()> {
     eliminate_left_recursion(grammar);
     Ok(())
+}
+
+#[cfg(test)]
+mod grammar_tests_helper {
+    use lexviz::scanner::Token;
+
+    pub fn get_token(token: &str, category: &str) -> Token {
+        Token::new(token.to_string(), category.to_string())
+    }
+}
+
+#[cfg(test)]
+mod ll_parser_test {
+    use std::collections::HashSet;
+
+    use lexviz::scanner::Token;
+
+    use crate::{
+        cfg::{Term, check_correctness_and_optimize},
+        ebnf::parse_grammar,
+        ll::eliminate_left_recursion,
+    };
+
+    use super::grammar_tests_helper::get_token;
+
+    #[test]
+    fn test_left_recursion_elimination() {
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\"(\"", "TERMINAL_LITERAL"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("\")\"", "TERMINAL_LITERAL"),
+            get_token("\"+\"", "TERMINAL_LITERAL"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("\"abc\"", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("(", "LPAREN"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("\"h\"", "TERMINAL_LITERAL"),
+            get_token(")", "RPAREN"),
+            get_token("?", "QUESTION"),
+            get_token("\"f\"", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"g\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("(", "LPAREN"),
+            get_token("<B>", "TERMINAL_LITERAL"),
+            get_token("\"i\"", "TERMINAL_LITERAL"),
+            get_token(")", "RPAREN"),
+            get_token("+", "QUESTION"),
+            get_token("\"d\"", "TERMINAL_LITERAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"e\"", "TERMINAL_LITERAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let result = parse_grammar(tokens);
+
+        assert!(result.is_ok());
+
+        let mut grammar = result.unwrap();
+
+        let result = check_correctness_and_optimize(&mut grammar);
+
+        assert!(result.is_ok());
+
+        eliminate_left_recursion(&mut grammar);
+
+        let tokens: Vec<Token> = vec![
+            get_token("<A>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("\"(\"", "TERMINAL_LITERAL"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("\")\"", "TERMINAL_LITERAL"),
+            get_token("\"+\"", "TERMINAL_LITERAL"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<B>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("\"abc\"", "TERMINAL_LITERAL"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"g\"", "TERMINAL_LITERAL"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<C>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("(", "LPAREN"),
+            get_token("\"g\"", "TERMINAL_LITERAL"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token("\"i\"", "TERMINAL_LITERAL"),
+            get_token(")", "RPAREN"),
+            get_token("+", "PLUS"),
+            get_token("\"d\"", "TERMINAL_LITERAL"),
+            get_token("<C'>", "NON_TERMINAL"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"e\"", "TERMINAL_LITERAL"),
+            get_token("<C'>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("EPSILON", "TERMINAL_CATEGORY"),
+            get_token("|", "ALTERNATION"),
+            get_token("(", "LPAREN"),
+            get_token("\"h\"", "TERMINAL_LITERAL"),
+            get_token(")", "RPAREN"),
+            get_token("?", "QUESTION"),
+            get_token("\"f\"", "TERMINAL_LITERAL"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+            get_token("<C'>", "NON_TERMINAL"),
+            get_token("::=", "DEFINES"),
+            get_token("EPSILON", "TERMINAL_CATEGORY"),
+            get_token("|", "ALTERNATION"),
+            get_token("\"abc\"", "TERMINAL_LITERAL"),
+            get_token("<B'>", "NON_TERMINAL"),
+            get_token("\"i\"", "TERMINAL_LITERAL"),
+            get_token("+", "PLUS"),
+            get_token("\"d\"", "TERMINAL_LITERAL"),
+            get_token("<C'>", "NON_TERMINAL"),
+            get_token(";", "TERMINATION"),
+        ];
+
+        let result = parse_grammar(tokens);
+
+        assert!(result.is_ok(), "Expected ok result but got {:?}", result);
+
+        let mut expected_grammar = result.unwrap();
+
+        let result = check_correctness_and_optimize(&mut expected_grammar);
+
+        assert!(result.is_ok());
+
+        for production in expected_grammar.get_productions() {
+            let left_term = production.get_left_term();
+            let test_production = grammar.find_production(left_term);
+            assert!(test_production.is_some());
+            let test_production = test_production.unwrap();
+            let expressions = production.get_expressions();
+            let test_expressions = test_production.get_expressions();
+            let expression_set: HashSet<Vec<Term>> = expressions.iter().cloned().collect();
+            let test_expression_set: HashSet<Vec<Term>> =
+                test_expressions.iter().cloned().collect();
+
+            assert_eq!(
+                expression_set, test_expression_set,
+                "Expected {:?} but got {:?} for production {:?}",
+                expression_set, test_expression_set, left_term
+            );
+        }
+    }
 }
